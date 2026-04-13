@@ -234,7 +234,7 @@ Respond ONLY with the JSON array.`;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       message = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-20250514",
         max_tokens: 4096,
         messages: [{ role: "user", content: fullPrompt }],
       });

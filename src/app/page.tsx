@@ -9,6 +9,11 @@ type Finding = {
   amount: string | null;
   severity: "critical" | "high" | "medium";
   category: string;
+  agent?: string;
+  department?: string;
+  recommendation?: string;
+  evidence?: string;
+  timeToValue?: string;
 };
 
 type ScanMode = "choose" | "uploading" | "scanning" | "done";
@@ -526,18 +531,43 @@ function FindingsList({ findings }: { findings: Finding[] }) {
     high: { bg: "rgba(245,158,11,0.08)", text: "#f59e0b" },
     medium: { bg: "rgba(59,130,246,0.08)", text: "#3b82f6" },
   };
+  const agentColors: Record<string, string> = {
+    Ledger: "#60a5fa", Quartermaster: "#f59e0b", Chief: "#c4501e",
+    Scout: "#4ade80", Signal: "#a78bfa", Atlas: "#f0abfc",
+  };
+  const tvColors: Record<string, { bg: string; text: string }> = {
+    immediate: { bg: "rgba(16,185,129,0.08)", text: "#10b981" },
+    "30 days": { bg: "rgba(59,130,246,0.08)", text: "#3b82f6" },
+    "90 days": { bg: "rgba(245,158,11,0.08)", text: "#f59e0b" },
+    "6 months": { bg: "rgba(168,162,158,0.08)", text: "#a8a29e" },
+  };
   return (
     <>
       {findings.map((f, i) => (
         <div key={f.id} className="p-5 rounded-lg animate-fade-up" style={{ border: "1px solid #ddd8d0", animationDelay: `${i * 0.04}s` }}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: colors[f.severity].bg, color: colors[f.severity].text }}>{f.severity}</span>
                 <span className="text-xs uppercase tracking-wider font-medium" style={{ color: "#a8a29e" }}>{f.category}</span>
+                {f.agent && (
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: agentColors[f.agent] || "#a8a29e" }}>{f.agent}</span>
+                )}
+                {f.timeToValue && tvColors[f.timeToValue] && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ background: tvColors[f.timeToValue].bg, color: tvColors[f.timeToValue].text }}>{f.timeToValue}</span>
+                )}
               </div>
               <h4 className="mt-2 text-sm font-semibold">{f.title}</h4>
               <p className="mt-1 text-sm leading-relaxed" style={{ color: "#6b6560" }}>{f.description}</p>
+              {f.recommendation && (
+                <div className="mt-3 p-3 rounded-lg" style={{ background: "#f0ede8" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#a8a29e" }}>Recommended action</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "#1a1a1a" }}>{f.recommendation}</p>
+                </div>
+              )}
+              {f.department && (
+                <p className="mt-2 text-xs" style={{ color: "#a8a29e" }}>Dept: {f.department}</p>
+              )}
             </div>
             {f.amount && (
               <div className="text-right flex-shrink-0">
