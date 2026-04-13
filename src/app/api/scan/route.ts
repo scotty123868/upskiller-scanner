@@ -66,8 +66,12 @@ export async function POST(request: Request) {
       send({ type: "progress", records: totalRecords, scanned: Math.floor(totalRecords * 0.4), message: "Cross-referencing records for duplicates and outliers..." });
 
       try {
-        const message = await anthropic.messages.create({
-          model: "claude-sonnet-4-20250514",
+        // Retry up to 3 times on overloaded errors
+        let message;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            message = await anthropic.messages.create({
+              model: "claude-sonnet-4-20250514",
           max_tokens: 4096,
           messages: [
             {
@@ -93,6 +97,19 @@ Respond ONLY with the JSON array, no other text.`,
             },
           ],
         });
+            break; // success, exit retry loop
+          } catch (retryErr: unknown) {
+            const status = (retryErr as { status?: number }).status;
+            if (status === 529 && attempt < 2) {
+              send({ type: "progress", records: totalRecords, scanned: Math.floor(totalRecords * (0.4 + attempt * 0.1)), message: "High demand — retrying analysis..." });
+              await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+              continue;
+            }
+            throw retryErr;
+          }
+        }
+
+        if (!message) throw new Error("Failed after retries");
 
         send({ type: "progress", records: totalRecords, scanned: Math.floor(totalRecords * 0.7), message: "Quantifying findings and estimating impact..." });
 

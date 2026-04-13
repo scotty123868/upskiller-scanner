@@ -1,0 +1,41 @@
+Invoice_ID,Vendor,Department,Amount,Date,Description,Status,PO_Number
+INV-001,Acme Supply Co,Operations,4250.00,2025-01-15,Office supplies quarterly order,Paid,PO-2025-001
+INV-002,Acme Supply Co,Marketing,4250.00,2025-01-15,Office supplies quarterly order,Paid,PO-2025-002
+INV-003,TechVendor Inc,IT,18500.00,2025-01-20,Software license renewal - Salesforce,Paid,PO-2025-003
+INV-004,TechVendor Inc,IT,18500.00,2025-01-22,Software license renewal - Salesforce,Paid,PO-2025-004
+INV-005,BuildRight LLC,Facilities,67000.00,2025-02-01,HVAC maintenance contract Q1,Paid,PO-2025-005
+INV-006,SafeGuard Insurance,HR,12400.00,2025-02-10,Workers comp insurance premium,Paid,PO-2025-006
+INV-007,CloudHost Pro,IT,8900.00,2025-02-15,AWS hosting fees - February,Paid,PO-2025-007
+INV-008,CloudHost Pro,Engineering,11200.00,2025-02-15,AWS hosting fees - February,Paid,PO-2025-008
+INV-009,Office Depot,Operations,3200.00,2025-03-01,Office supplies monthly,Paid,PO-2025-009
+INV-010,Acme Supply Co,Operations,3400.00,2025-03-01,Office supplies monthly,Paid,PO-2025-010
+INV-011,DataSync Corp,IT,45000.00,2025-03-05,Annual data integration platform,Paid,PO-2025-011
+INV-012,DataSync Corp,IT,45000.00,2025-03-07,Annual data integration platform,Pending,PO-2025-012
+INV-013,FleetMaster,Operations,28500.00,2025-03-10,Vehicle fleet management Q1,Paid,PO-2025-013
+INV-014,FleetMaster,Logistics,31200.00,2025-03-10,Vehicle fleet management Q1,Paid,PO-2025-014
+INV-015,TechVendor Inc,Marketing,8500.00,2025-03-15,HubSpot license renewal,Paid,PO-2025-015
+INV-016,TechVendor Inc,Sales,8500.00,2025-03-15,HubSpot license renewal,Paid,PO-2025-016
+INV-017,BuildRight LLC,Facilities,67000.00,2025-04-01,HVAC maintenance contract Q2,Paid,PO-2025-017
+INV-018,Kronos Systems,HR,22000.00,2025-04-05,Time tracking software annual,Paid,PO-2025-018
+INV-019,Kronos Systems,Operations,22000.00,2025-04-05,Time tracking software annual,Paid,PO-2025-019
+INV-020,PaperCo Inc,Operations,1800.00,2025-04-10,Print supplies,Paid,PO-2025-020
+INV-021,PaperCo Inc,Marketing,2100.00,2025-04-10,Print supplies,Paid,PO-2025-021
+INV-022,SecureIT Solutions,IT,35000.00,2025-04-15,Cybersecurity audit and monitoring,Paid,PO-2025-022
+INV-023,CloudHost Pro,IT,9400.00,2025-04-15,AWS hosting fees - April,Paid,PO-2025-023
+INV-024,CloudHost Pro,Engineering,11800.00,2025-04-15,AWS hosting fees - April,Paid,PO-2025-024
+INV-025,Acme Supply Co,Operations,4250.00,2025-04-15,Office supplies quarterly order,Paid,PO-2025-025
+INV-026,Acme Supply Co,Facilities,4250.00,2025-04-16,Office supplies quarterly order,Paid,PO-2025-026
+INV-027,TravelEase Corp,Sales,15600.00,2025-05-01,Corporate travel Q1,Paid,PO-2025-027
+INV-028,TravelEase Corp,Sales,15600.00,2025-05-02,Corporate travel Q1,Pending,PO-2025-028
+INV-029,MegaClean Services,Facilities,6500.00,2025-05-10,Janitorial services monthly,Paid,PO-2025-029
+INV-030,MegaClean Services,Facilities,6500.00,2025-05-10,Janitorial services monthly,Paid,PO-2025-030
+INV-031,DataSync Corp,Engineering,15000.00,2025-05-15,API integration add-on,Paid,PO-2025-031
+INV-032,ConsultPro LLC,Strategy,85000.00,2025-05-20,Management consulting engagement,Paid,PO-2025-032
+INV-033,ConsultPro LLC,Strategy,85000.00,2025-06-01,Management consulting engagement,Pending,PO-2025-033
+INV-034,FleetMaster,Operations,28500.00,2025-06-10,Vehicle fleet management Q2,Paid,PO-2025-034
+INV-035,FleetMaster,Logistics,33400.00,2025-06-10,Vehicle fleet management Q2,Paid,PO-2025-035
+INV-036,TechVendor Inc,IT,18500.00,2025-06-15,Software license renewal - Salesforce,Paid,PO-2025-036
+INV-037,Rent-A-Forklift,Warehouse,4200.00,2025-06-20,Forklift rental - monthly,Paid,PO-2025-037
+INV-038,Rent-A-Forklift,Logistics,4200.00,2025-06-20,Forklift rental - monthly,Paid,PO-2025-038
+INV-039,BuildRight LLC,Facilities,72000.00,2025-07-01,HVAC maintenance contract Q3,Paid,PO-2025-039
+INV-040,SafeGuard Insurance,HR,12400.00,2025-07-10,Workers comp insurance premium Q3,Paid,PO-2025-040
