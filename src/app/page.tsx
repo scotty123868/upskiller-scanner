@@ -284,23 +284,23 @@ function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFi
           </div>
         </button>
 
-        {/* Path B: Personal */}
+        {/* Path B: Agentic Crawl */}
         <button
           onClick={() => startGoogleScan(false)}
           className="group text-left p-7 rounded-xl transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer"
-          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(16,185,129,0.03) 0%, #faf9f7 100%)" }}
+          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(196,80,30,0.03) 0%, #faf9f7 100%)" }}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.08)" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(196,80,30,0.08)" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4501e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
             </div>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#10b981" }}>Quick Scan</span>
+            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#c4501e" }}>Agentic Crawl</span>
           </div>
-          <h3 className="text-lg font-semibold mb-2">Scan my accounts</h3>
+          <h3 className="text-lg font-semibold mb-2">Let agents loose on my systems</h3>
           <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
-            Sign in with your Google account. We read your inbox for invoices, receipts, and vendor emails. No admin access needed. Discover every tool and vendor you pay for.
+            Sign in with Google. Our agents autonomously crawl your Gmail, Drive, and Calendar. They find every vendor, contract, subscription, and spending pattern. No admin needed.
           </p>
-          <div className="mt-5 flex items-center gap-2 text-sm font-semibold" style={{ color: "#10b981" }}>
+          <div className="mt-5 flex items-center gap-2 text-sm font-semibold" style={{ color: "#c4501e" }}>
             <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
             Sign in with Google
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
