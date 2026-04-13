@@ -234,14 +234,7 @@ export default function Home() {
       <Nav />
       <main className="pt-32 px-6 md:px-18 max-w-5xl mx-auto pb-16">
         {mode === "choose" && (
-          <ChooseMode
-            dragActive={dragActive}
-            handleDrag={handleDrag}
-            handleDrop={handleDrop}
-            fileInputRef={fileInputRef}
-            handleFile={handleFile}
-            startGoogleScan={startGoogleScan}
-          />
+          <ChooseMode startGoogleScan={startGoogleScan} />
         )}
         {mode === "uploading" && <UploadingState fileName={fileName} />}
         {mode === "scanning" && (
@@ -288,12 +281,7 @@ function Nav() {
 }
 
 /* ─── CHOOSE MODE ─── */
-function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFile, startGoogleScan }: {
-  dragActive: boolean;
-  handleDrag: (e: React.DragEvent) => void;
-  handleDrop: (e: React.DragEvent) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
-  handleFile: (file: File) => void;
+function ChooseMode({ startGoogleScan }: {
   startGoogleScan: (admin: boolean) => void;
 }) {
   return (
@@ -305,8 +293,8 @@ function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFi
         Connect once. Our agents autonomously crawl your environment, discover every tool, vendor, and cost, and surface findings in minutes.
       </p>
 
-      {/* Three paths */}
-      <div className="mt-12 grid md:grid-cols-3 gap-5">
+      {/* Two paths */}
+      <div className="mt-12 grid md:grid-cols-2 gap-5">
         {/* Path A: Full Org */}
         <button
           onClick={() => startGoogleScan(true)}
@@ -353,52 +341,6 @@ function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFi
           </div>
         </button>
 
-        {/* Path C: Desktop Crawler */}
-        <div
-          className="group text-left p-7 rounded-xl transition-all hover:-translate-y-1 hover:shadow-lg"
-          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(168,162,158,0.05) 0%, #faf9f7 100%)" }}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(26,26,26,0.06)" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 10l3 3 7-7"/></svg>
-            </div>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#1a1a1a" }}>Desktop Crawler</span>
-          </div>
-          <h3 className="text-lg font-semibold mb-2">Crawl all your apps</h3>
-          <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
-            Our agent takes over your Chrome browser and crawls every app you're logged into. ERPs, Slack, QuickBooks, NetSuite, everything. Uses your existing sessions.
-          </p>
-          <div className="mt-5">
-            <code className="text-xs px-3 py-2 rounded-lg block" style={{ background: "#f0ede8", color: "#6b6560", fontFamily: "monospace" }}>
-              npx tsx src/crawler/crawl.ts
-            </code>
-            <p className="mt-2 text-xs" style={{ color: "#a8a29e" }}>Run locally. Requires Node.js + Chrome.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div className="mt-10 flex items-center gap-4">
-        <div className="flex-1 h-px" style={{ background: "#ddd8d0" }} />
-        <span className="text-xs font-medium" style={{ color: "#a8a29e" }}>or upload a file</span>
-        <div className="flex-1 h-px" style={{ background: "#ddd8d0" }} />
-      </div>
-
-      {/* File upload zone (compact) */}
-      <div
-        className={`mt-6 border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${dragActive ? "border-[#c4501e] bg-[#c4501e]/5" : "border-[#ddd8d0] hover:border-[#a8a29e]"}`}
-        onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <div className="flex items-center justify-center gap-4">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <div className="text-left">
-            <p className="text-sm font-medium">Drop a CSV, Excel, or JSON file</p>
-            <p className="text-xs" style={{ color: "#a8a29e" }}>AP invoices, vendor lists, license exports, equipment logs</p>
-          </div>
-        </div>
-        <input ref={fileInputRef} type="file" className="hidden" accept=".csv,.xlsx,.xls,.json,.tsv"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       </div>
 
       {/* Trust signals */}
