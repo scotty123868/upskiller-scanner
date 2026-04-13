@@ -26,6 +26,33 @@ type AgentLogEntry = {
   type: "discovery" | "analysis" | "finding" | "progress";
 };
 
+type TechStackApp = {
+  name: string;
+  category: string;
+  estimatedCost: string;
+  emailActivity: number;
+  actualAmounts?: number[];
+};
+
+type GapItem = {
+  section: string;
+  status: "populated" | "partial" | "empty";
+  coverage: number;
+  dataNeeded: string;
+  howToProvide: string;
+  expectedValue: string;
+};
+
+type ScanSummary = {
+  totalAnnualSpend?: string;
+  totalAnnualWaste?: string;
+  findingsCount?: number;
+  criticalCount?: number;
+  appsDiscovered?: number;
+  coverageScore?: number;
+  spendByCategory?: Record<string, string>;
+};
+
 export default function Home() {
   const [mode, setMode] = useState<ScanMode>("choose");
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -35,6 +62,9 @@ export default function Home() {
   const [fileName, setFileName] = useState("");
   const [totalSavings, setTotalSavings] = useState(0);
   const [scanSource, setScanSource] = useState<"file" | "google-admin" | "google-personal">("file");
+  const [techStack, setTechStack] = useState<TechStackApp[]>([]);
+  const [gaps, setGaps] = useState<GapItem[]>([]);
+  const [summary, setSummary] = useState<ScanSummary>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
@@ -108,6 +138,9 @@ export default function Home() {
     setFindings([]);
     setTotalSavings(0);
     setAgentLog([]);
+    setTechStack([]);
+    setGaps([]);
+    setSummary({});
 
     addAgentLog("Dispatch", adminMode ? "Initiating full org scan via Google Workspace..." : "Initiating personal account scan via Gmail...", "progress");
 
@@ -148,10 +181,17 @@ export default function Home() {
               addAgentLog(event.agent, event.message, event.logType || "progress");
             } else if (event.type === "progress") {
               setScanProgress(event);
+            } else if (event.type === "techStack") {
+              setTechStack(event.apps || []);
+              setSummary((prev) => ({ ...prev, totalAnnualSpend: event.totalEstimatedSpend, appsDiscovered: event.appCount }));
+            } else if (event.type === "summary") {
+              setSummary(event);
+            } else if (event.type === "gaps") {
+              setGaps(event.gaps || []);
             } else if (event.type === "finding") {
               findingId++;
               setFindings((prev) => [...prev, { id: findingId, ...event }]);
-              addAgentLog("Ledger", `${event.title}${event.amount ? " — " + event.amount : ""}`, "finding");
+              addAgentLog(event.agent || "Ledger", `${event.title}${event.amount ? " — " + event.amount : ""}`, "finding");
               if (event.amount) {
                 const num = parseInt(event.amount.replace(/[^0-9]/g, ""));
                 if (!isNaN(num)) setTotalSavings((prev) => prev + num);
@@ -211,6 +251,8 @@ export default function Home() {
             totalSavings={totalSavings}
             agentLog={agentLog}
             scanSource={scanSource}
+            techStack={techStack}
+            summary={summary}
           />
         )}
         {mode === "done" && (
@@ -219,7 +261,11 @@ export default function Home() {
             totalSavings={totalSavings}
             scanSource={scanSource}
             agentLog={agentLog}
-            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); }}
+            techStack={techStack}
+            gaps={gaps}
+            summary={summary}
+            handleFile={handleFile}
+            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); }}
           />
         )}
       </main>
@@ -383,12 +429,14 @@ function UploadingState({ fileName }: { fileName: string }) {
 }
 
 /* ─── SCANNING VIEW ─── */
-function ScanningView({ progress, findings, totalSavings, agentLog, scanSource }: {
+function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, techStack, summary }: {
   progress: { records: number; scanned: number; message: string };
   findings: Finding[];
   totalSavings: number;
   agentLog: AgentLogEntry[];
   scanSource: string;
+  techStack: TechStackApp[];
+  summary: ScanSummary;
 }) {
   const sourceLabel = scanSource === "google-admin" ? "Google Workspace" : scanSource === "google-personal" ? "Gmail" : "uploaded file";
 
@@ -420,8 +468,60 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource }
         </div>
       )}
 
+      {/* Mini Command Center Preview */}
+      {(techStack.length > 0 || summary.totalAnnualSpend) && (
+        <div className="mt-8 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Command Center Preview</span>
+            {summary.coverageScore != null && (
+              <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.3)" }}>Coverage: {summary.coverageScore}%</span>
+            )}
+          </div>
+          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            {summary.totalAnnualSpend && (
+              <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Est. Annual Spend</p>
+                <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.totalAnnualSpend}</p>
+              </div>
+            )}
+            {summary.totalAnnualWaste && (
+              <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Waste Identified</p>
+                <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste}</p>
+              </div>
+            )}
+            <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Apps Discovered</p>
+              <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.appsDiscovered || techStack.length}</p>
+            </div>
+            <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Findings</p>
+              <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{findings.length}</p>
+            </div>
+          </div>
+          {/* Tech stack strip */}
+          {techStack.length > 0 && (
+            <div className="px-5 pb-4">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>Tech Stack</p>
+              <div className="flex flex-wrap gap-2">
+                {techStack.slice(0, 20).map((app) => (
+                  <span key={app.name} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
+                    {app.name} <span style={{ color: "rgba(255,255,255,0.25)" }}>{app.estimatedCost}</span>
+                  </span>
+                ))}
+                {techStack.length > 20 && (
+                  <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.2)" }}>
+                    +{techStack.length - 20} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Two-column: Agent log + Findings */}
-      <div className="mt-8 grid md:grid-cols-5 gap-6">
+      <div className="mt-6 grid md:grid-cols-5 gap-6">
         {/* Agent feed (left, narrower) */}
         <div className="md:col-span-2 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
           <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -466,15 +566,21 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource }
 }
 
 /* ─── DONE VIEW ─── */
-function DoneView({ findings, totalSavings, scanSource, agentLog, onReset }: {
+function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, handleFile, onReset }: {
   findings: Finding[];
   totalSavings: number;
   scanSource: string;
   agentLog: AgentLogEntry[];
+  techStack: TechStackApp[];
+  gaps: GapItem[];
+  summary: ScanSummary;
+  handleFile: (file: File) => void;
   onReset: () => void;
 }) {
   const criticalCount = findings.filter((f) => f.severity === "critical").length;
   const highCount = findings.filter((f) => f.severity === "high").length;
+  const gapFileRef = useRef<HTMLInputElement>(null);
+  const [activeGap, setActiveGap] = useState<string | null>(null);
 
   return (
     <div className="animate-fade-up">
@@ -482,8 +588,9 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, onReset }: {
         <div>
           <h2 className="font-fraunces text-3xl md:text-4xl font-light" style={{ letterSpacing: "-0.03em" }}>Scan complete.</h2>
           <p className="mt-3 text-sm leading-relaxed max-w-md" style={{ color: "#6b6560" }}>
-            {findings.length} actionable findings.
-            {totalSavings > 0 && <> Estimated annualized impact: <b className="text-[#c4501e] font-semibold">${totalSavings.toLocaleString()}K</b>.</>}
+            {findings.length} actionable findings across {summary.appsDiscovered || techStack.length || 0} discovered apps.
+            {summary.totalAnnualWaste && <> Estimated waste: <b className="text-[#c4501e] font-semibold">{summary.totalAnnualWaste}</b>.</>}
+            {summary.totalAnnualSpend && <> Total estimated spend: <b className="font-semibold">{summary.totalAnnualSpend}</b>/yr.</>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -492,15 +599,126 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, onReset }: {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Findings" value={findings.length.toString()} />
-        <StatCard label="Critical" value={criticalCount.toString()} color="#c4501e" />
-        <StatCard label="High Impact" value={highCount.toString()} color="#f59e0b" />
-        <StatCard label="Est. Annual Impact" value={totalSavings > 0 ? `$${totalSavings.toLocaleString()}K` : "—"} color="#c4501e" />
+      {/* Mini Command Center */}
+      <div className="mt-8 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
+        <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Command Center</span>
+          {summary.coverageScore != null && (
+            <div className="flex items-center gap-3">
+              <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
+                <div className="h-full rounded-full bg-[#4ade80] transition-all" style={{ width: `${summary.coverageScore}%` }} />
+              </div>
+              <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.3)" }}>{summary.coverageScore}% coverage</span>
+            </div>
+          )}
+        </div>
+        <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Annual Spend</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.totalAnnualSpend || "—"}</p>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Waste Found</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}</p>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Apps</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.appsDiscovered || techStack.length}</p>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Critical</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: criticalCount > 0 ? "#c4501e" : "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{criticalCount}</p>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>High</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: highCount > 0 ? "#f59e0b" : "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{highCount}</p>
+          </div>
+        </div>
+
+        {/* Tech Stack Strip */}
+        {techStack.length > 0 && (
+          <div className="px-5 pb-4">
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+              Discovered Tech Stack ({techStack.length} tools)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {techStack.slice(0, 25).map((app) => (
+                <span key={app.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
+                  {app.name} <span style={{ color: "rgba(255,255,255,0.25)" }}>{app.estimatedCost}</span>
+                </span>
+              ))}
+              {techStack.length > 25 && (
+                <span className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.2)" }}>+{techStack.length - 25} more</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Spend by Category */}
+        {summary.spendByCategory && Object.keys(summary.spendByCategory).length > 0 && (
+          <div className="px-5 pb-5">
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>Spend by Category</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {Object.entries(summary.spendByCategory).slice(0, 8).map(([cat, amount]) => (
+                <div key={cat} className="flex items-baseline justify-between px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{cat}</span>
+                  <span className="text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.6)" }}>{amount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Two-column: Agent log + Findings */}
+      {/* Gap Wizard */}
+      {gaps.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-fraunces text-xl font-light mb-2" style={{ letterSpacing: "-0.02em" }}>Unlock more findings</h3>
+          <p className="text-sm mb-6" style={{ color: "#6b6560" }}>
+            Your scan covered {summary.coverageScore || 0}% of the data needed for a complete assessment. Upload these to fill the gaps:
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {gaps.map((gap) => {
+              const statusColor = gap.status === "populated" ? "#4ade80" : gap.status === "partial" ? "#f59e0b" : "#ddd8d0";
+              const isActive = activeGap === gap.section;
+              return (
+                <div
+                  key={gap.section}
+                  className="p-5 rounded-xl transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md"
+                  style={{ border: `1px solid ${isActive ? "#c4501e" : "#ddd8d0"}` }}
+                  onClick={() => { setActiveGap(gap.section); gapFileRef.current?.click(); }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-2 h-2 rounded-full" style={{ background: statusColor }} />
+                    <span className="text-sm font-semibold">{gap.section}</span>
+                    <span className="ml-auto text-xs tabular-nums" style={{ color: "#a8a29e" }}>{gap.coverage}%</span>
+                  </div>
+                  <p className="text-sm" style={{ color: "#6b6560" }}>{gap.dataNeeded}</p>
+                  {gap.howToProvide && (
+                    <p className="mt-2 text-xs leading-relaxed p-2.5 rounded-lg" style={{ background: "#f0ede8", color: "#6b6560" }}>{gap.howToProvide}</p>
+                  )}
+                  {gap.expectedValue && (
+                    <p className="mt-2 text-xs" style={{ color: "#c4501e" }}>Expected additional findings: {gap.expectedValue}</p>
+                  )}
+                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: "#c4501e" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload data to fill this gap
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <input
+            ref={gapFileRef}
+            type="file"
+            className="hidden"
+            accept=".csv,.xlsx,.xls,.json,.tsv"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+          />
+        </div>
+      )}
+
+      {/* Findings + Agent Log */}
       <div className="mt-8 grid md:grid-cols-5 gap-6">
         <div className="md:col-span-2 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
           <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -527,12 +745,12 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, onReset }: {
       {/* CTA */}
       <div className="mt-12 p-8 rounded-xl" style={{ background: "#1a1a1a" }}>
         <h3 className="font-fraunces text-xl font-light text-white/90" style={{ letterSpacing: "-0.02em" }}>
-          {scanSource === "file" ? "This is from one file. Imagine what we'd find across all your systems." : "This is from one scan. We can go deeper."}
+          {scanSource === "file" ? "This is from one file. Imagine what we'd find across all your systems." : `We found ${summary.totalAnnualWaste || "$" + totalSavings.toLocaleString() + "K"} from ${summary.coverageScore || 0}% coverage. Full access unlocks the rest.`}
         </h3>
         <p className="mt-3 text-sm text-white/40 max-w-md leading-relaxed">
-          Two-week engagement. Fixed fee. Read-only access to your actual systems. We connect to everything and surface findings like these at scale.
+          Two-week engagement. Fixed fee. Read-only access to your actual systems. Our agents connect to everything and run continuously.
         </p>
-        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement" className="mt-6 inline-flex text-sm font-semibold px-6 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all">Schedule a walkthrough</a>
+        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20waste" className="mt-6 inline-flex text-sm font-semibold px-6 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all">Schedule a walkthrough</a>
       </div>
     </div>
   );
