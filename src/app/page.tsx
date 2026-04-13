@@ -259,8 +259,8 @@ function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFi
         Connect once. Our agents autonomously crawl your environment, discover every tool, vendor, and cost, and surface findings in minutes.
       </p>
 
-      {/* Two paths */}
-      <div className="mt-12 grid md:grid-cols-2 gap-5">
+      {/* Three paths */}
+      <div className="mt-12 grid md:grid-cols-3 gap-5">
         {/* Path A: Full Org */}
         <button
           onClick={() => startGoogleScan(true)}
@@ -306,6 +306,29 @@ function ChooseMode({ dragActive, handleDrag, handleDrop, fileInputRef, handleFi
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </button>
+
+        {/* Path C: Desktop Crawler */}
+        <div
+          className="group text-left p-7 rounded-xl transition-all hover:-translate-y-1 hover:shadow-lg"
+          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(168,162,158,0.05) 0%, #faf9f7 100%)" }}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(26,26,26,0.06)" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 10l3 3 7-7"/></svg>
+            </div>
+            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#1a1a1a" }}>Desktop Crawler</span>
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Crawl all your apps</h3>
+          <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
+            Our agent takes over your Chrome browser and crawls every app you're logged into. ERPs, Slack, QuickBooks, NetSuite, everything. Uses your existing sessions.
+          </p>
+          <div className="mt-5">
+            <code className="text-xs px-3 py-2 rounded-lg block" style={{ background: "#f0ede8", color: "#6b6560", fontFamily: "monospace" }}>
+              npx tsx src/crawler/crawl.ts
+            </code>
+            <p className="mt-2 text-xs" style={{ color: "#a8a29e" }}>Run locally. Requires Node.js + Chrome.</p>
+          </div>
+        </div>
       </div>
 
       {/* Divider */}

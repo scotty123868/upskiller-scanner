@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "crawl": "npx tsx src/crawler/crawl.ts",
+    "crawl:slack": "npx tsx src/crawler/crawl.ts --apps=slack",
+    "crawl:quickbooks": "npx tsx src/crawler/crawl.ts --apps=quickbooks",
+    "crawl:all": "npx tsx src/crawler/crawl.ts --apps=slack,quickbooks,gmail,google_admin,hubspot"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -14,6 +18,7 @@
     "next": "16.2.3",
     "next-auth": "^5.0.0-beta.30",
     "papaparse": "^5.5.3",
+    "playwright-core": "^1.59.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "xlsx": "^0.18.5"
@@ -27,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
