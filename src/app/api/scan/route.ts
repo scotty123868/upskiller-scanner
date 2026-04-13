@@ -7,9 +7,14 @@ const anthropic = new Anthropic();
 export const maxDuration = 300; // 5 minutes for Opus deep analysis
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
+  let formData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return new Response("No file uploaded", { status: 400 });
+  }
   const file = formData.get("file") as File;
-  if (!file) {
+  if (!file || !file.name) {
     return new Response("No file uploaded", { status: 400 });
   }
 

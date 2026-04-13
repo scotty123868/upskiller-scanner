@@ -285,66 +285,74 @@ function ChooseMode({ startGoogleScan }: {
   startGoogleScan: (admin: boolean) => void;
 }) {
   return (
-    <div className="animate-fade-up">
+    <div className="animate-fade-up max-w-xl">
       <h1 className="font-fraunces text-4xl md:text-5xl font-light leading-tight" style={{ letterSpacing: "-0.045em", textWrap: "balance" }}>
         See what your systems are sitting on.
       </h1>
-      <p className="mt-5 text-base leading-relaxed max-w-lg" style={{ color: "#6b6560" }}>
-        Connect once. Our agents autonomously crawl your environment, discover every tool, vendor, and cost, and surface findings in minutes.
+      <p className="mt-5 text-base leading-relaxed" style={{ color: "#6b6560" }}>
+        One click. Our agents scan your email for every tool, vendor, and subscription you pay for. They read invoices, map your tech stack, estimate costs, and surface waste, all in under 5 minutes.
       </p>
 
-      {/* Two paths */}
-      <div className="mt-12 grid md:grid-cols-2 gap-5">
-        {/* Path A: Full Org */}
-        <button
-          onClick={() => startGoogleScan(true)}
-          className="group text-left p-7 rounded-xl transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer"
-          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(59,130,246,0.03) 0%, #faf9f7 100%)" }}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(59,130,246,0.08)" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
-            </div>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#3b82f6" }}>Full Organization</span>
+      {/* Single CTA */}
+      <button
+        onClick={() => startGoogleScan(false)}
+        className="mt-10 w-full group text-left p-8 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer"
+        style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(250,249,247,1) 0%, rgba(240,237,232,0.5) 100%)" }}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-semibold mb-2">Start your free scan</h3>
+            <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
+              Sign in with Google and our agents will discover every app, read your invoices, map your vendors, and estimate your total SaaS spend. Read-only. Nothing stored.
+            </p>
           </div>
-          <h3 className="text-lg font-semibold mb-2">Scan your entire org</h3>
-          <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
-            Sign in as a Google Workspace admin. Our agents discover every app, user, license, and vendor invoice across your organization. One click, full visibility.
-          </p>
-          <div className="mt-5 flex items-center gap-2 text-sm font-semibold" style={{ color: "#3b82f6" }}>
-            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-            Sign in with Google Workspace
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <div className="flex-shrink-0 ml-6 w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#1a1a1a" }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
           </div>
-        </button>
+        </div>
+        <div className="mt-6 flex items-center gap-3 text-sm font-semibold" style={{ color: "#1a1a1a" }}>
+          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+          Sign in with Google
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </div>
+      </button>
 
-        {/* Path B: Agentic Crawl */}
-        <button
-          onClick={() => startGoogleScan(false)}
-          className="group text-left p-7 rounded-xl transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer"
-          style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(196,80,30,0.03) 0%, #faf9f7 100%)" }}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(196,80,30,0.08)" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4501e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </div>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#c4501e" }}>Agentic Crawl</span>
-          </div>
-          <h3 className="text-lg font-semibold mb-2">Let agents loose on my systems</h3>
-          <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
-            Sign in with Google. Our agents autonomously crawl your Gmail, Drive, and Calendar. They find every vendor, contract, subscription, and spending pattern. No admin needed.
-          </p>
-          <div className="mt-5 flex items-center gap-2 text-sm font-semibold" style={{ color: "#c4501e" }}>
-            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-            Sign in with Google
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </div>
-        </button>
+      {/* Admin option (subtle, secondary) */}
+      <button
+        onClick={() => startGoogleScan(true)}
+        className="mt-4 w-full text-center py-3 text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer"
+        style={{ color: "#a8a29e" }}
+      >
+        Google Workspace admin? Sign in for full org visibility
+      </button>
 
+      {/* What the scan discovers */}
+      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 gap-4">
+        {[
+          { label: "Tech Stack Map", desc: "Every SaaS tool you use, auto-discovered from email" },
+          { label: "Cost Estimation", desc: "Per-tool spend estimates using industry pricing data" },
+          { label: "Duplicate Detection", desc: "Overlapping tools serving the same function" },
+          { label: "Renewal Calendar", desc: "Upcoming renewals and renegotiation windows" },
+          { label: "Shadow IT", desc: "Tools people are paying for that nobody approved" },
+          { label: "Key Person Risk", desc: "Vendor relationships concentrated in one person" },
+        ].map((item) => (
+          <div key={item.label} className="p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
+            <p className="text-sm font-semibold mb-1">{item.label}</p>
+            <p className="text-xs leading-relaxed" style={{ color: "#a8a29e" }}>{item.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* What happens after */}
+      <div className="mt-10 p-5 rounded-xl" style={{ background: "#f0ede8" }}>
+        <p className="text-sm font-semibold mb-2">After the scan</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>
+          Your Command Center populates with everything we found. Gaps show exactly what data to provide next, like AP exports or vendor lists, to unlock deeper findings. Each piece of data you add reveals more waste.
+        </p>
       </div>
 
       {/* Trust signals */}
-      <div className="mt-12 flex items-center gap-8 flex-wrap">
+      <div className="mt-10 flex items-center gap-8 flex-wrap">
         {[
           { icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", label: "Read-only access" },
           { icon: "M3 11h18M3 11V6a2 2 0 012-2h14a2 2 0 012 2v5M3 11v5a2 2 0 002 2h14a2 2 0 002-2v-5", label: "Data never stored" },

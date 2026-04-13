@@ -406,6 +406,16 @@ You have the complete tech stack with pricing AND real financial email data. Run
 
 7. TOTAL SPEND PICTURE: Paint the complete annual SaaS spend picture. Break down by category.
 
+8. SUBSCRIPTION CREEP: Trace when each vendor first appeared in email. Build a timeline of SaaS additions. Flag tools added in the last 6 months that may be trial-to-paid conversions nobody reviewed.
+
+9. RENEWAL RISK CALENDAR: Find any emails mentioning renewal dates, contract expirations, or auto-renewal. Build a next-30/60/90 day renewal calendar. Flag renewals approaching without review.
+
+10. KEY PERSON RISK: Identify vendor relationships concentrated in one person (one email address handles all communication with a vendor). If that person leaves, the relationship and institutional knowledge walks out.
+
+11. SHADOW IT: Apps sending billing/notification emails that appear to be individual purchases, not org-wide approved tools. These are people buying SaaS on personal credit cards.
+
+12. WORKFLOW AUTOMATION OPPORTUNITIES: Analyze email patterns for manual processes that could be automated. Examples: weekly reports being compiled manually and emailed, recurring data requests between people, approval chains done via email instead of workflow tools, spreadsheets being emailed back and forth. For each, estimate time savings and recommend specific automation approaches.
+
 ## OUTPUT FORMAT
 
 {
@@ -446,7 +456,18 @@ You have the complete tech stack with pricing AND real financial email data. Run
   ]
 }
 
-Find 15-25 findings. Every finding must reference specific apps, pricing, and user counts from the tech stack above. The gaps section tells the user exactly what to upload next.
+Find 15-25 findings. Every finding must reference specific apps, pricing, and user counts from the tech stack above.
+
+The gaps section tells the user exactly what to upload next. ALWAYS include a gap for "Desktop & Browser Access" with howToProvide: "Allow UpSkiller to scan your desktop apps and browser for deeper analysis of ERPs, Slack, and native applications."
+
+Also include a "renewalCalendar" array and "automationOpportunities" array in the output:
+
+"renewalCalendar": [
+  { "vendor": "name", "renewalDate": "YYYY-MM-DD or 'estimated Q3 2026'", "estimatedCost": "$XXK", "action": "Renegotiate / Cancel / Review" }
+],
+"automationOpportunities": [
+  { "process": "what manual process was detected", "evidence": "email patterns that reveal it", "estimatedTimeSavings": "X hours/week", "recommendedTool": "specific automation tool or approach" }
+]
 
 Respond ONLY with the JSON.`;
 
