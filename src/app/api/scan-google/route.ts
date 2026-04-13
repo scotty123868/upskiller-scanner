@@ -454,11 +454,12 @@ Respond ONLY with the JSON.`;
         let message;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            message = await anthropic.messages.create({
+            const opusStream = anthropic.messages.stream({
               model: "claude-opus-4-20250514",
               max_tokens: 16384,
               messages: [{ role: "user", content: prompt }],
             });
+            message = await opusStream.finalMessage();
             break;
           } catch (err: unknown) {
             const status = (err as { status?: number }).status;
