@@ -446,28 +446,39 @@ You have the complete tech stack with pricing AND real financial email data. Run
   ],
   "gaps": [
     {
-      "section": "Command Center section",
-      "status": "populated | partial | empty",
-      "coverage": N,
-      "dataNeeded": "What to provide",
-      "howToProvide": "Step-by-step: 'In QuickBooks: Reports > Expenses by Vendor > Export CSV'",
-      "expectedValue": "Estimated additional waste"
+      "priority": 1,
+      "type": "connect_app | upload_data | desktop_scan | manual_input",
+      "appName": "name of specific app discovered in email, or null for general gaps",
+      "icon": "quickbooks | slack | salesforce | xero | netsuite | desktop | upload | generic",
+      "title": "Short headline like 'Connect QuickBooks' or 'Scan your desktop'",
+      "description": "1-2 sentences explaining WHAT this unlocks and WHY, personalized to their data",
+      "howToProvide": "Step-by-step instructions. For connect_app: the OAuth flow. For upload: exact export path in the app.",
+      "expectedFindings": N,
+      "expectedValue": "$XXK in additional waste expected",
+      "unlocks": ["Verified invoice amounts", "Vendor payment history", "etc"],
+      "coverageBefore": N,
+      "coverageAfter": N
     }
+  ],
+  "renewalCalendar": [
+    { "vendor": "name", "renewalDate": "YYYY-MM-DD or 'estimated Q3 2026'", "estimatedCost": "$XXK", "action": "Renegotiate | Cancel | Review", "urgency": "urgent | upcoming | future" }
+  ],
+  "automationOpportunities": [
+    { "process": "what manual process was detected", "evidence": "email patterns that reveal it", "estimatedTimeSavings": "X hours/week", "recommendedTool": "specific automation tool or approach", "complexity": "low | medium | high" }
   ]
 }
 
 Find 15-25 findings. Every finding must reference specific apps, pricing, and user counts from the tech stack above.
 
-The gaps section tells the user exactly what to upload next. ALWAYS include a gap for "Desktop & Browser Access" with howToProvide: "Allow UpSkiller to scan your desktop apps and browser for deeper analysis of ERPs, Slack, and native applications."
-
-Also include a "renewalCalendar" array and "automationOpportunities" array in the output:
-
-"renewalCalendar": [
-  { "vendor": "name", "renewalDate": "YYYY-MM-DD or 'estimated Q3 2026'", "estimatedCost": "$XXK", "action": "Renegotiate / Cancel / Review" }
-],
-"automationOpportunities": [
-  { "process": "what manual process was detected", "evidence": "email patterns that reveal it", "estimatedTimeSavings": "X hours/week", "recommendedTool": "specific automation tool or approach" }
-]
+CRITICAL: The "gaps" array must be PERSONALIZED based on what you actually found:
+- If you found QuickBooks emails, include a gap to "Connect QuickBooks" with specific export instructions
+- If you found Slack emails, include a gap to "Connect Slack" to read vendor channels
+- If you found Salesforce/HubSpot, include a gap to connect CRM for license audit
+- ALWAYS include a "Desktop & Browser Scan" gap as the deepest-access option
+- ALWAYS include an "Upload AP Data" gap if you found financial patterns that need verification
+- Order gaps by expected value (highest first)
+- Each gap must reference SPECIFIC apps/data you actually discovered (not generic suggestions)
+- coverageBefore is current coverage %, coverageAfter is estimated after filling this gap
 
 Respond ONLY with the JSON.`;
 

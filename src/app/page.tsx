@@ -35,12 +35,23 @@ type TechStackApp = {
 };
 
 type GapItem = {
-  section: string;
-  status: "populated" | "partial" | "empty";
-  coverage: number;
-  dataNeeded: string;
-  howToProvide: string;
-  expectedValue: string;
+  priority?: number;
+  type?: "connect_app" | "upload_data" | "desktop_scan" | "manual_input";
+  appName?: string;
+  icon?: string;
+  title?: string;
+  description?: string;
+  howToProvide?: string;
+  expectedFindings?: number;
+  expectedValue?: string;
+  unlocks?: string[];
+  coverageBefore?: number;
+  coverageAfter?: number;
+  // Legacy fields for backward compat with file scan
+  section?: string;
+  status?: "populated" | "partial" | "empty";
+  coverage?: number;
+  dataNeeded?: string;
 };
 
 type ScanSummary = {
@@ -620,39 +631,118 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
         )}
       </div>
 
-      {/* Gap Wizard */}
+      {/* Intelligent Gap Wizard */}
       {gaps.length > 0 && (
-        <div className="mt-8">
-          <h3 className="font-fraunces text-xl font-light mb-2" style={{ letterSpacing: "-0.02em" }}>Unlock more findings</h3>
-          <p className="text-sm mb-6" style={{ color: "#6b6560" }}>
-            Your scan covered {summary.coverageScore || 0}% of the data needed for a complete assessment. Upload these to fill the gaps:
+        <div className="mt-10">
+          <div className="flex items-center gap-4 mb-2">
+            <h3 className="font-fraunces text-2xl font-light" style={{ letterSpacing: "-0.02em" }}>I found {summary.coverageScore || 35}% of the picture.</h3>
+          </div>
+          <p className="text-sm mb-8 max-w-lg" style={{ color: "#6b6560" }}>
+            Here's exactly what to do next to unlock the rest, ordered by how much more waste each step will reveal.
           </p>
-          <div className="grid md:grid-cols-2 gap-4">
-            {gaps.map((gap) => {
-              const statusColor = gap.status === "populated" ? "#4ade80" : gap.status === "partial" ? "#f59e0b" : "#ddd8d0";
-              const isActive = activeGap === gap.section;
+
+          {/* Coverage progress */}
+          <div className="mb-8 p-5 rounded-xl" style={{ background: "#f0ede8" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#a8a29e" }}>Assessment Coverage</span>
+              <span className="text-sm font-semibold tabular-nums">{summary.coverageScore || 35}%</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#ddd8d0" }}>
+              <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${summary.coverageScore || 35}%`, background: "linear-gradient(90deg, #c4501e 0%, #f59e0b 100%)" }} />
+            </div>
+            <p className="mt-2 text-xs" style={{ color: "#a8a29e" }}>Each step below adds to your coverage. Complete all steps to reach 100%.</p>
+          </div>
+
+          {/* Personalized gap steps */}
+          <div className="space-y-4">
+            {gaps.map((gap, i) => {
+              const isDesktop = gap.type === "desktop_scan" || gap.icon === "desktop";
+              const isUpload = gap.type === "upload_data" || gap.icon === "upload";
+              const isConnect = gap.type === "connect_app";
+              const coverageGain = (gap.coverageAfter || 0) - (gap.coverageBefore || 0);
+
               return (
                 <div
-                  key={gap.section}
-                  className="p-5 rounded-xl transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md"
-                  style={{ border: `1px solid ${isActive ? "#c4501e" : "#ddd8d0"}` }}
-                  onClick={() => { setActiveGap(gap.section); gapFileRef.current?.click(); }}
+                  key={gap.title || i}
+                  className="group rounded-xl overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                  style={{ border: "1px solid #ddd8d0" }}
                 >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-2 h-2 rounded-full" style={{ background: statusColor }} />
-                    <span className="text-sm font-semibold">{gap.section}</span>
-                    <span className="ml-auto text-xs tabular-nums" style={{ color: "#a8a29e" }}>{gap.coverage}%</span>
-                  </div>
-                  <p className="text-sm" style={{ color: "#6b6560" }}>{gap.dataNeeded}</p>
-                  {gap.howToProvide && (
-                    <p className="mt-2 text-xs leading-relaxed p-2.5 rounded-lg" style={{ background: "#f0ede8", color: "#6b6560" }}>{gap.howToProvide}</p>
-                  )}
-                  {gap.expectedValue && (
-                    <p className="mt-2 text-xs" style={{ color: "#c4501e" }}>Expected additional findings: {gap.expectedValue}</p>
-                  )}
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: "#c4501e" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Upload data to fill this gap
+                  <div className="flex items-stretch">
+                    {/* Step number + priority bar */}
+                    <div className="w-16 flex-shrink-0 flex flex-col items-center justify-center" style={{ background: i === 0 ? "rgba(196,80,30,0.06)" : i === 1 ? "rgba(245,158,11,0.04)" : "rgba(168,162,158,0.04)" }}>
+                      <span className="text-2xl font-fraunces font-light" style={{ color: i === 0 ? "#c4501e" : i === 1 ? "#f59e0b" : "#a8a29e", letterSpacing: "-0.03em" }}>{i + 1}</span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-semibold">{gap.title}</h4>
+                            {coverageGain > 0 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.08)", color: "#10b981" }}>+{coverageGain}% coverage</span>
+                            )}
+                          </div>
+                          <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{gap.description}</p>
+
+                          {/* How to provide */}
+                          {gap.howToProvide && (
+                            <div className="mt-3 p-3 rounded-lg text-xs leading-relaxed" style={{ background: "#f0ede8", color: "#6b6560" }}>
+                              {gap.howToProvide}
+                            </div>
+                          )}
+
+                          {/* What it unlocks */}
+                          {gap.unlocks && gap.unlocks.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {gap.unlocks.map((u: string) => (
+                                <span key={u} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.06)", color: "#3b82f6" }}>{u}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Expected value + action */}
+                        <div className="flex-shrink-0 text-right">
+                          {gap.expectedValue && (
+                            <p className="font-fraunces text-lg font-light" style={{ color: "#c4501e", letterSpacing: "-0.02em" }}>{gap.expectedValue}</p>
+                          )}
+                          {gap.expectedFindings && gap.expectedFindings > 0 && (
+                            <p className="text-xs" style={{ color: "#a8a29e" }}>~{gap.expectedFindings} findings</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action button */}
+                      <div className="mt-4">
+                        {isDesktop ? (
+                          <button className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all cursor-pointer">
+                            Allow Desktop Access
+                          </button>
+                        ) : isUpload ? (
+                          <button
+                            onClick={() => { gapFileRef.current?.click(); }}
+                            className="text-sm font-semibold px-5 py-2.5 rounded-full transition-all cursor-pointer hover:bg-[#f0ede8]"
+                            style={{ border: "1px solid #ddd8d0" }}
+                          >
+                            Upload {gap.appName || "data"}
+                          </button>
+                        ) : isConnect ? (
+                          <button className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all cursor-pointer flex items-center gap-2">
+                            Connect {gap.appName}
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { gapFileRef.current?.click(); }}
+                            className="text-sm font-semibold px-5 py-2.5 rounded-full transition-all cursor-pointer hover:bg-[#f0ede8]"
+                            style={{ border: "1px solid #ddd8d0" }}
+                          >
+                            Provide this data
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
