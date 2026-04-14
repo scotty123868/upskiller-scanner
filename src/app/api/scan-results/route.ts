@@ -1,11 +1,11 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin, isConfigured } from "@/lib/supabase";
 
 export async function GET(request: Request) {
   const cookieHeader = request.headers.get("cookie") || "";
   const userIdMatch = cookieHeader.match(/user_id=([^;]+)/);
   const userId = userIdMatch?.[1];
 
-  if (!userId) {
+  if (!userId || !isConfigured) {
     return Response.json({ scan: null }, { status: 200 });
   }
 
