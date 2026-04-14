@@ -238,14 +238,49 @@ export default function Home() {
     else if (e.type === "dragleave") setDragActive(false);
   }, []);
 
-  // Check for OAuth callback
+  // Check for OAuth callback OR load saved results
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("scan") === "ready") {
       const adminMode = params.get("mode") === "admin";
       window.history.replaceState({}, "", "/");
       startGoogleScan(adminMode);
+      return;
     }
+
+    // Try to load saved scan results
+    fetch("/api/scan-results")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.scan) {
+          const s = data.scan;
+          setSummary(s.summary || {});
+          setTechStack(s.tech_stack || []);
+          setGaps(s.gaps || []);
+          setRenewals(s.renewals || []);
+          setAutomations(s.automations || []);
+          if (s.findings) {
+            setFindings(s.findings.map((f: Record<string, unknown>, i: number) => ({ ...f, id: i + 1 })));
+            const total = s.findings.reduce((sum: number, f: Record<string, unknown>) => {
+              const amt = typeof f.amount === "string" ? parseInt(f.amount.replace(/[^0-9]/g, "")) : 0;
+              return sum + (isNaN(amt) ? 0 : amt);
+            }, 0);
+            setTotalSavings(total);
+          }
+          if (s.agentLogs) {
+            setAgentLog(s.agentLogs.map((l: Record<string, unknown>) => ({
+              id: Date.now() + Math.random(),
+              agent: l.agent,
+              message: l.message,
+              timestamp: new Date(l.created_at as string).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+              type: l.log_type || "progress",
+            })));
+          }
+          setScanSource("google-personal");
+          setMode("done");
+        }
+      })
+      .catch(() => { /* no saved results, show landing page */ });
   }, [startGoogleScan]);
 
   return (
@@ -338,14 +373,24 @@ function ChooseMode({ startGoogleScan }: {
         </div>
       </button>
 
-      {/* Admin option (subtle, secondary) */}
-      <button
-        onClick={() => startGoogleScan(true)}
-        className="mt-4 w-full text-center py-3 text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer"
-        style={{ color: "#a8a29e" }}
-      >
-        Google Workspace admin? Sign in for full org visibility
-      </button>
+      {/* Alternative sign-in options */}
+      <div className="mt-4 flex items-center gap-4">
+        <a
+          href="/api/auth/microsoft"
+          className="flex-1 text-center py-3 text-sm font-medium rounded-full transition-all hover:bg-[#f0ede8] flex items-center justify-center gap-2"
+          style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+          Sign in with Microsoft
+        </a>
+        <button
+          onClick={() => startGoogleScan(true)}
+          className="text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer py-3 px-4"
+          style={{ color: "#a8a29e" }}
+        >
+          Google Workspace admin?
+        </button>
+      </div>
 
       {/* What the scan discovers */}
       <div className="mt-12 grid grid-cols-2 md:grid-cols-3 gap-4">

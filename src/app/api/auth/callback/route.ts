@@ -1,10 +1,11 @@
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
+import { getOrCreateUser } from "@/lib/supabase";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state") || "personal";
+  const state = url.searchParams.get("state") || "crawl";
 
   if (!code) {
     return NextResponse.redirect(new URL("/?error=no_code", request.url));
@@ -18,15 +19,50 @@ export async function GET(request: Request) {
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
-    // Redirect back to the app with the token (stored in a short-lived cookie)
+
+    // Get user info from Google
+    oauth2Client.setCredentials({ access_token: tokens.access_token });
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    let email = "";
+    let name = "";
+    let avatarUrl = "";
+    try {
+      const userInfo = await oauth2.userinfo.get();
+      email = userInfo.data.email || "";
+      name = userInfo.data.name || "";
+      avatarUrl = userInfo.data.picture || "";
+    } catch {
+      // userinfo may fail, continue without
+    }
+
+    // Auto-create account in Supabase
+    let userId = "";
+    if (email) {
+      try {
+        const user = await getOrCreateUser(email, name, avatarUrl, "google");
+        userId = user.id;
+      } catch {
+        // Supabase might not be configured, proceed without persistence
+      }
+    }
+
     const response = NextResponse.redirect(new URL(`/?scan=ready&mode=${state}`, request.url));
     response.cookies.set("scan_token", tokens.access_token || "", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 3600, // 1 hour
-      path: "/",
+      httpOnly: true, secure: true, sameSite: "lax", maxAge: 3600, path: "/",
     });
+    response.cookies.set("scan_provider", "google", {
+      httpOnly: true, secure: true, sameSite: "lax", maxAge: 3600, path: "/",
+    });
+    if (userId) {
+      response.cookies.set("user_id", userId, {
+        httpOnly: true, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
+      });
+    }
+    if (email) {
+      response.cookies.set("user_email", email, {
+        httpOnly: false, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
+      });
+    }
     return response;
   } catch (err) {
     console.error("OAuth callback error:", err);
