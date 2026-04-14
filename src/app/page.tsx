@@ -286,7 +286,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="pt-32 px-6 md:px-18 max-w-5xl mx-auto pb-16">
+      <main className="pt-24 md:pt-32 px-5 md:px-18 max-w-5xl mx-auto pb-16">
         {mode === "choose" && (
           <ChooseMode startGoogleScan={startGoogleScan} />
         )}
@@ -326,11 +326,11 @@ export default function Home() {
 /* ─── NAV ─── */
 function Nav() {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 px-6 md:px-18 h-15 flex items-center justify-between" style={{ background: "rgba(250,249,247,0.88)", backdropFilter: "blur(24px)", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
-      <a href="https://upskillerai.com" className="font-fraunces font-medium text-lg" style={{ letterSpacing: "-0.03em" }}>UpSkiller</a>
-      <div className="flex items-center gap-4">
-        <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "#a8a29e" }}>Scanner</span>
-        <a href="mailto:scotty@upskillerai.com" className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
+    <nav className="fixed top-0 left-0 right-0 z-50 px-5 md:px-18 h-14 md:h-15 flex items-center justify-between" style={{ background: "rgba(250,249,247,0.88)", backdropFilter: "blur(24px)", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+      <a href="https://upskillerai.com" className="font-fraunces font-medium text-base md:text-lg" style={{ letterSpacing: "-0.03em" }}>UpSkiller</a>
+      <div className="flex items-center gap-3 md:gap-4">
+        <span className="text-xs font-semibold tracking-wider uppercase hidden sm:inline" style={{ color: "#a8a29e" }}>Scanner</span>
+        <a href="mailto:scotty@upskillerai.com" className="text-xs md:text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
       </div>
     </nav>
   );
@@ -342,31 +342,31 @@ function ChooseMode({ startGoogleScan }: {
 }) {
   return (
     <div className="animate-fade-up max-w-xl">
-      <h1 className="font-fraunces text-4xl md:text-5xl font-light leading-tight" style={{ letterSpacing: "-0.045em", textWrap: "balance" }}>
+      <h1 className="font-fraunces text-3xl md:text-5xl font-light leading-snug md:leading-tight" style={{ letterSpacing: "-0.04em", textWrap: "balance" }}>
         See what your systems are sitting on.
       </h1>
-      <p className="mt-5 text-base leading-relaxed" style={{ color: "#6b6560" }}>
+      <p className="mt-4 md:mt-5 text-sm md:text-base leading-relaxed" style={{ color: "#6b6560" }}>
         One click. Our agents scan your email for every tool, vendor, and subscription you pay for. They read invoices, map your tech stack, estimate costs, and surface waste, all in under 5 minutes.
       </p>
 
       {/* Single CTA */}
       <button
         onClick={() => startGoogleScan(false)}
-        className="mt-10 w-full group text-left p-8 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer"
+        className="mt-8 md:mt-10 w-full group text-left p-6 md:p-8 rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer"
         style={{ border: "1px solid #ddd8d0", background: "linear-gradient(180deg, rgba(250,249,247,1) 0%, rgba(240,237,232,0.5) 100%)" }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-xl font-semibold mb-2">Start your free scan</h3>
-            <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>
+            <h3 className="text-lg md:text-xl font-semibold mb-2">Start your free scan</h3>
+            <p className="text-xs md:text-sm leading-relaxed" style={{ color: "#6b6560" }}>
               Sign in with Google and our agents will discover every app, read your invoices, map your vendors, and estimate your total SaaS spend. Read-only. Nothing stored.
             </p>
           </div>
-          <div className="flex-shrink-0 ml-6 w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#1a1a1a" }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+          <div className="flex-shrink-0 w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center" style={{ background: "#1a1a1a" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
           </div>
         </div>
-        <div className="mt-6 flex items-center gap-3 text-sm font-semibold" style={{ color: "#1a1a1a" }}>
+        <div className="mt-5 md:mt-6 flex items-center gap-3 text-sm font-semibold" style={{ color: "#1a1a1a" }}>
           <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
           Sign in with Google
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-1"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -374,18 +374,18 @@ function ChooseMode({ startGoogleScan }: {
       </button>
 
       {/* Alternative sign-in options */}
-      <div className="mt-4 flex items-center gap-4">
+      <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <a
           href="/api/auth/microsoft"
-          className="flex-1 text-center py-3 text-sm font-medium rounded-full transition-all hover:bg-[#f0ede8] flex items-center justify-center gap-2"
+          className="text-center py-2.5 px-5 text-sm font-medium rounded-full transition-all hover:bg-[#f0ede8] flex items-center justify-center gap-2"
           style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}
         >
-          <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+          <svg width="14" height="14" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
           Sign in with Microsoft
         </a>
         <button
           onClick={() => startGoogleScan(true)}
-          className="text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer py-3 px-4"
+          className="text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer py-2"
           style={{ color: "#a8a29e" }}
         >
           Google Workspace admin?
@@ -393,7 +393,7 @@ function ChooseMode({ startGoogleScan }: {
       </div>
 
       {/* What the scan discovers */}
-      <div className="mt-12 grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="mt-8 md:mt-12 grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: "Tech Stack Map", desc: "Every SaaS tool you use, auto-discovered from email" },
           { label: "Cost Estimation", desc: "Per-tool spend estimates using industry pricing data" },
@@ -402,23 +402,23 @@ function ChooseMode({ startGoogleScan }: {
           { label: "Shadow IT", desc: "Tools people are paying for that nobody approved" },
           { label: "Key Person Risk", desc: "Vendor relationships concentrated in one person" },
         ].map((item) => (
-          <div key={item.label} className="p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
-            <p className="text-sm font-semibold mb-1">{item.label}</p>
-            <p className="text-xs leading-relaxed" style={{ color: "#a8a29e" }}>{item.desc}</p>
+          <div key={item.label} className="p-3 md:p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
+            <p className="text-xs md:text-sm font-semibold mb-1">{item.label}</p>
+            <p className="text-xs leading-relaxed hidden md:block" style={{ color: "#a8a29e" }}>{item.desc}</p>
           </div>
         ))}
       </div>
 
       {/* What happens after */}
-      <div className="mt-10 p-5 rounded-xl" style={{ background: "#f0ede8" }}>
-        <p className="text-sm font-semibold mb-2">After the scan</p>
+      <div className="mt-8 md:mt-10 p-4 md:p-5 rounded-xl" style={{ background: "#f0ede8" }}>
+        <p className="text-xs md:text-sm font-semibold mb-1 md:mb-2">After the scan</p>
         <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>
           Your Command Center populates with everything we found. Gaps show exactly what data to provide next, like AP exports or vendor lists, to unlock deeper findings. Each piece of data you add reveals more waste.
         </p>
       </div>
 
       {/* Trust signals */}
-      <div className="mt-10 flex items-center gap-8 flex-wrap">
+      <div className="mt-8 md:mt-10 flex items-center gap-4 md:gap-8 flex-wrap">
         {[
           { icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", label: "Read-only access" },
           { icon: "M3 11h18M3 11V6a2 2 0 012-2h14a2 2 0 012 2v5M3 11v5a2 2 0 002 2h14a2 2 0 002-2v-5", label: "Data never stored" },
