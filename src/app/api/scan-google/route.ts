@@ -532,7 +532,19 @@ Respond ONLY with the JSON.`;
 
           if (gaps) {
             send({ type: "gaps", gaps });
-            send({ type: "agent-log", agent: "Atlas", message: `Gap analysis: ${gaps.filter((g: { status: string }) => g.status === "empty").length} sections need more data. Coverage: ${summary?.coverageScore || 0}%`, logType: "analysis" });
+            send({ type: "agent-log", agent: "Atlas", message: `Gap analysis: ${gaps.filter((g: { status?: string }) => g.status === "empty" || !g.status).length} gaps identified. Coverage: ${summary?.coverageScore || 0}%`, logType: "analysis" });
+          }
+
+          const renewalCalendar = parsed.renewalCalendar;
+          if (renewalCalendar && renewalCalendar.length > 0) {
+            send({ type: "renewals", renewals: renewalCalendar });
+            send({ type: "agent-log", agent: "Signal", message: `Renewal calendar: ${renewalCalendar.length} upcoming renewals detected`, logType: "discovery" });
+          }
+
+          const automationOpps = parsed.automationOpportunities;
+          if (automationOpps && automationOpps.length > 0) {
+            send({ type: "automations", automations: automationOpps });
+            send({ type: "agent-log", agent: "Signal", message: `${automationOpps.length} workflow automation opportunities identified`, logType: "finding" });
           }
         }
       } catch (err) {

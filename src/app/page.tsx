@@ -76,6 +76,8 @@ export default function Home() {
   const [techStack, setTechStack] = useState<TechStackApp[]>([]);
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [summary, setSummary] = useState<ScanSummary>({});
+  const [renewals, setRenewals] = useState<{ vendor: string; renewalDate: string; estimatedCost: string; action: string; urgency: string }[]>([]);
+  const [automations, setAutomations] = useState<{ process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
@@ -197,8 +199,14 @@ export default function Home() {
               setSummary((prev) => ({ ...prev, totalAnnualSpend: event.totalEstimatedSpend, appsDiscovered: event.appCount }));
             } else if (event.type === "summary") {
               setSummary(event);
+              if (event.renewalCalendar) setRenewals(event.renewalCalendar);
+              if (event.automationOpportunities) setAutomations(event.automationOpportunities);
             } else if (event.type === "gaps") {
               setGaps(event.gaps || []);
+            } else if (event.type === "renewals") {
+              setRenewals(event.renewals || []);
+            } else if (event.type === "automations") {
+              setAutomations(event.automations || []);
             } else if (event.type === "finding") {
               findingId++;
               setFindings((prev) => [...prev, { id: findingId, ...event }]);
@@ -268,8 +276,10 @@ export default function Home() {
             techStack={techStack}
             gaps={gaps}
             summary={summary}
+            renewals={renewals}
+            automations={automations}
             handleFile={handleFile}
-            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); }}
+            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); setRenewals([]); setAutomations([]); }}
           />
         )}
       </main>
@@ -527,7 +537,7 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
 }
 
 /* ─── DONE VIEW ─── */
-function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, handleFile, onReset }: {
+function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, renewals, automations, handleFile, onReset }: {
   findings: Finding[];
   totalSavings: number;
   scanSource: string;
@@ -535,6 +545,8 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
   techStack: TechStackApp[];
   gaps: GapItem[];
   summary: ScanSummary;
+  renewals: { vendor: string; renewalDate: string; estimatedCost: string; action: string; urgency: string }[];
+  automations: { process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[];
   handleFile: (file: File) => void;
   onReset: () => void;
 }) {
@@ -714,11 +726,12 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
                       </div>
 
                       {/* Action button */}
-                      <div className="mt-4">
+                      <div className="mt-4 flex items-center gap-3">
                         {isDesktop ? (
-                          <button className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all cursor-pointer">
-                            Allow Desktop Access
-                          </button>
+                          <a href="mailto:scotty@upskillerai.com?subject=Desktop%20scan%20access%20request" className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all inline-flex items-center gap-2">
+                            Request Desktop Access
+                            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>Beta</span>
+                          </a>
                         ) : isUpload ? (
                           <button
                             onClick={() => { gapFileRef.current?.click(); }}
@@ -728,10 +741,10 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
                             Upload {gap.appName || "data"}
                           </button>
                         ) : isConnect ? (
-                          <button className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all cursor-pointer flex items-center gap-2">
+                          <a href={`mailto:scotty@upskillerai.com?subject=Connect%20${encodeURIComponent(gap.appName || "app")}%20request&body=I%20want%20to%20connect%20${encodeURIComponent(gap.appName || "my app")}%20for%20deeper%20scanning.`} className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all inline-flex items-center gap-2">
                             Connect {gap.appName}
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                          </button>
+                            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>Beta</span>
+                          </a>
                         ) : (
                           <button
                             onClick={() => { gapFileRef.current?.click(); }}
@@ -755,6 +768,58 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
             accept=".csv,.xlsx,.xls,.json,.tsv"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
+        </div>
+      )}
+
+      {/* Renewal Calendar */}
+      {renewals.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>Renewal Calendar</h3>
+          <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #ddd8d0" }}>
+            <div className="grid grid-cols-4 gap-0 px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ background: "#f0ede8", color: "#a8a29e" }}>
+              <span>Vendor</span><span>Renewal Date</span><span>Est. Cost</span><span>Action</span>
+            </div>
+            {renewals.map((r, i) => (
+              <div key={i} className="grid grid-cols-4 gap-0 px-5 py-3 items-center" style={{ borderTop: "1px solid #ddd8d0" }}>
+                <span className="text-sm font-medium">{r.vendor}</span>
+                <span className="text-sm tabular-nums" style={{ color: "#6b6560" }}>{r.renewalDate}</span>
+                <span className="text-sm font-medium tabular-nums">{r.estimatedCost}</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full inline-block w-fit" style={{
+                  background: r.urgency === "urgent" ? "rgba(196,80,30,0.08)" : r.urgency === "upcoming" ? "rgba(245,158,11,0.08)" : "rgba(59,130,246,0.08)",
+                  color: r.urgency === "urgent" ? "#c4501e" : r.urgency === "upcoming" ? "#f59e0b" : "#3b82f6"
+                }}>{r.action}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Automation Opportunities */}
+      {automations.length > 0 && (
+        <div className="mt-8">
+          <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>Workflow Automation Opportunities</h3>
+          <div className="space-y-3">
+            {automations.map((a, i) => (
+              <div key={i} className="p-5 rounded-xl" style={{ border: "1px solid #ddd8d0" }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{
+                        background: a.complexity === "low" ? "rgba(16,185,129,0.08)" : a.complexity === "medium" ? "rgba(245,158,11,0.08)" : "rgba(196,80,30,0.08)",
+                        color: a.complexity === "low" ? "#10b981" : a.complexity === "medium" ? "#f59e0b" : "#c4501e"
+                      }}>{a.complexity} effort</span>
+                      <span className="text-xs font-semibold" style={{ color: "#10b981" }}>{a.estimatedTimeSavings} saved</span>
+                    </div>
+                    <h4 className="text-sm font-semibold mb-1">{a.process}</h4>
+                    <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{a.evidence}</p>
+                    {a.recommendedTool && (
+                      <p className="mt-2 text-xs" style={{ color: "#3b82f6" }}>Recommended: {a.recommendedTool}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
