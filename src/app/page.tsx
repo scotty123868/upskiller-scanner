@@ -2,6 +2,48 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
+// Count-up animation hook
+function useCountUp(target: number, duration = 1500, delay = 2000) {
+  const [value, setValue] = useState(0);
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setStarted(true), delay);
+    return () => clearTimeout(timer);
+  }, [delay]);
+  useEffect(() => {
+    if (!started || target === 0) return;
+    const startTime = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setValue(Math.round(target * eased));
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [started, target, duration]);
+  return value;
+}
+
+// Parse dollar string to number: "$2.3M" → 2300, "$340K" → 340
+function parseDollarAmount(s: string): { num: number; suffix: string } {
+  if (!s) return { num: 0, suffix: "" };
+  const cleaned = s.replace(/[^0-9.KMBkmb]/g, "");
+  const numPart = parseFloat(cleaned) || 0;
+  if (s.toUpperCase().includes("M")) return { num: numPart * 1000, suffix: "M" };
+  if (s.toUpperCase().includes("B")) return { num: numPart * 1000000, suffix: "B" };
+  return { num: numPart, suffix: "K" };
+}
+
+function CountUpDollar({ value, className, style }: { value: string; className?: string; style?: React.CSSProperties }) {
+  const parsed = parseDollarAmount(value);
+  const animated = useCountUp(parsed.num, 1800, 2000);
+  const display = parsed.suffix === "M" ? `$${(animated / 1000).toFixed(1)}M` :
+    parsed.suffix === "B" ? `$${(animated / 1000000).toFixed(1)}B` :
+    `$${animated.toLocaleString()}K`;
+  return <span className={className} style={style}>{display}</span>;
+}
+
 type Finding = {
   id: number;
   title: string;
@@ -383,6 +425,11 @@ function ChooseMode({ startGoogleScan }: {
         </div>
       </button>
 
+      {/* Google warning note */}
+      <p className="mt-3 text-xs leading-relaxed" style={{ color: "#a8a29e" }}>
+        Google will show a security warning because we're new. Click <b style={{ color: "#6b6560" }}>Advanced</b> then <b style={{ color: "#6b6560" }}>"Go to upskiller-scanner.vercel.app"</b> to proceed safely. We only read your email metadata, never store anything.
+      </p>
+
       {/* Alternative sign-in options */}
       <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <a
@@ -643,10 +690,10 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
         </div>
       )}
 
-      {/* THE BIG NUMBER — the gasp moment */}
+      {/* THE BIG NUMBER — the gasp moment with count-up */}
       <div className="text-center mt-8 md:mt-12 mb-4 md:mb-8">
         <h2 className="font-fraunces text-5xl md:text-8xl font-light animate-count-up reveal-4" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
-          {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}
+          <CountUpDollar value={summary.totalAnnualWaste || `$${totalSavings}K`} />
         </h2>
         <p className="text-sm mt-2 md:mt-3 animate-fade-in reveal-5" style={{ color: "#6b6560" }}>
           in addressable waste — from email alone
