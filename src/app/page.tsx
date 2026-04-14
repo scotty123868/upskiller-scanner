@@ -57,9 +57,12 @@ type GapItem = {
 type ScanSummary = {
   totalAnnualSpend?: string;
   totalAnnualWaste?: string;
+  totalAutomatableHours?: string;
   findingsCount?: number;
   criticalCount?: number;
   appsDiscovered?: number;
+  workflowsDiscovered?: number;
+  workflowsAutomatable?: number;
   coverageScore?: number;
   spendByCategory?: Record<string, string>;
 };
@@ -78,6 +81,8 @@ export default function Home() {
   const [summary, setSummary] = useState<ScanSummary>({});
   const [renewals, setRenewals] = useState<{ vendor: string; renewalDate: string; estimatedCost: string; action: string; urgency: string }[]>([]);
   const [automations, setAutomations] = useState<{ process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[]>([]);
+  const [workflows, setWorkflows] = useState<{ name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[]>([]);
+  const [activeSection, setActiveSection] = useState<"spend" | "workflows" | "waste" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
@@ -203,6 +208,8 @@ export default function Home() {
               if (event.automationOpportunities) setAutomations(event.automationOpportunities);
             } else if (event.type === "gaps") {
               setGaps(event.gaps || []);
+            } else if (event.type === "workflows") {
+              setWorkflows(event.workflows || []);
             } else if (event.type === "renewals") {
               setRenewals(event.renewals || []);
             } else if (event.type === "automations") {
@@ -313,8 +320,11 @@ export default function Home() {
             summary={summary}
             renewals={renewals}
             automations={automations}
+            workflows={workflows}
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
             handleFile={handleFile}
-            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); setRenewals([]); setAutomations([]); }}
+            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); setRenewals([]); setAutomations([]); setWorkflows([]); setActiveSection(null); }}
           />
         )}
       </main>
@@ -582,7 +592,7 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
 }
 
 /* ─── DONE VIEW ─── */
-function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, renewals, automations, handleFile, onReset }: {
+function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, renewals, automations, workflows, activeSection, setActiveSection, handleFile, onReset }: {
   findings: Finding[];
   totalSavings: number;
   scanSource: string;
@@ -592,6 +602,9 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
   summary: ScanSummary;
   renewals: { vendor: string; renewalDate: string; estimatedCost: string; action: string; urgency: string }[];
   automations: { process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[];
+  workflows: { name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[];
+  activeSection: "spend" | "workflows" | "waste" | null;
+  setActiveSection: (s: "spend" | "workflows" | "waste" | null) => void;
   handleFile: (file: File) => void;
   onReset: () => void;
 }) {
@@ -602,20 +615,133 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
 
   return (
     <div className="animate-fade-up">
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <h2 className="font-fraunces text-3xl md:text-4xl font-light" style={{ letterSpacing: "-0.03em" }}>Scan complete.</h2>
-          <p className="mt-3 text-sm leading-relaxed max-w-md" style={{ color: "#6b6560" }}>
-            {findings.length} actionable findings across {summary.appsDiscovered || techStack.length || 0} discovered apps.
-            {summary.totalAnnualWaste && <> Estimated waste: <b className="text-[#c4501e] font-semibold">{summary.totalAnnualWaste}</b>.</>}
-            {summary.totalAnnualSpend && <> Total estimated spend: <b className="font-semibold">{summary.totalAnnualSpend}</b>/yr.</>}
-          </p>
+      {/* HERO NUMBER */}
+      <div className="text-center py-8 md:py-12 animate-fade-up">
+        <p className="text-sm font-medium mb-3" style={{ color: "#6b6560" }}>Your organization is sitting on</p>
+        <h2 className="font-fraunces text-5xl md:text-7xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
+          {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}
+        </h2>
+        <p className="text-sm mt-3" style={{ color: "#a8a29e" }}>in addressable waste</p>
+        <div className="mt-4 flex items-center justify-center gap-6 text-xs tabular-nums" style={{ color: "#6b6560" }}>
+          <span><b className="font-semibold">{summary.appsDiscovered || techStack.length}</b> tools</span>
+          <span style={{ color: "#ddd8d0" }}>|</span>
+          <span><b className="font-semibold">{summary.workflowsDiscovered || workflows.length || "—"}</b> workflows</span>
+          <span style={{ color: "#ddd8d0" }}>|</span>
+          <span><b className="font-semibold">{summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || "—"}</b> automatable</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={onReset} className="text-sm font-medium px-5 py-2.5 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
-          <a href="mailto:scotty@upskillerai.com?subject=Scanner%20results" className="text-sm font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us about these</a>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
+          <a href="mailto:scotty@upskillerai.com?subject=Scanner%20results%20—%20want%20to%20learn%20more" className="text-xs font-semibold px-4 py-2 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
         </div>
       </div>
+
+      {/* THREE PILLARS */}
+      <div className="grid grid-cols-3 gap-3 md:gap-4 mb-8">
+        {([
+          { key: "spend" as const, icon: "💰", label: "SPEND", value: summary.totalAnnualSpend || "—", sub: `across ${summary.appsDiscovered || techStack.length} tools`, color: "#3b82f6" },
+          { key: "workflows" as const, icon: "⚡", label: "WORKFLOWS", value: String(summary.workflowsDiscovered || workflows.length || "—"), sub: `${summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || 0} automatable`, color: "#10b981" },
+          { key: "waste" as const, icon: "🔍", label: "WASTE", value: summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`, sub: `${findings.length} findings`, color: "#c4501e" },
+        ]).map((pillar) => (
+          <button
+            key={pillar.key}
+            onClick={() => setActiveSection(activeSection === pillar.key ? null : pillar.key)}
+            className={`text-left p-4 md:p-5 rounded-xl transition-all cursor-pointer hover:-translate-y-0.5 ${activeSection === pillar.key ? "shadow-lg -translate-y-0.5" : ""}`}
+            style={{ border: `2px solid ${activeSection === pillar.key ? pillar.color : "#ddd8d0"}`, background: activeSection === pillar.key ? `${pillar.color}08` : "transparent" }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: pillar.color }}>{pillar.label}</p>
+            <p className="font-fraunces text-xl md:text-2xl font-light" style={{ letterSpacing: "-0.03em" }}>{pillar.value}</p>
+            <p className="text-xs mt-1" style={{ color: "#a8a29e" }}>{pillar.sub}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* FOCUSED SECTIONS - appear when pillar is clicked */}
+
+      {/* SPEND section */}
+      {activeSection === "spend" && techStack.length > 0 && (
+        <div className="mb-8 animate-fade-up rounded-xl overflow-hidden" style={{ border: "2px solid #3b82f6" }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ background: "rgba(59,130,246,0.04)", borderBottom: "1px solid rgba(59,130,246,0.1)" }}>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#3b82f6" }}>Tech Stack Map</span>
+            <button onClick={() => setActiveSection(null)} className="text-xs" style={{ color: "#a8a29e" }}>Close</button>
+          </div>
+          <div className="p-5">
+            {summary.spendByCategory && Object.keys(summary.spendByCategory).length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
+                {Object.entries(summary.spendByCategory).map(([cat, amount]) => (
+                  <div key={cat} className="flex items-baseline justify-between px-3 py-2.5 rounded-lg" style={{ background: "#f0ede8" }}>
+                    <span className="text-xs font-medium">{cat}</span>
+                    <span className="text-xs font-semibold tabular-nums">{amount}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {techStack.map((app) => (
+                <span key={app.name} className="text-xs px-3 py-1.5 rounded-full" style={{ background: "#f0ede8", color: "#1a1a1a" }}>
+                  {app.name} <span style={{ color: "#a8a29e" }}>{app.estimatedCost}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WORKFLOWS section */}
+      {activeSection === "workflows" && workflows.length > 0 && (
+        <div className="mb-8 animate-fade-up rounded-xl overflow-hidden" style={{ border: "2px solid #10b981" }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ background: "rgba(16,185,129,0.04)", borderBottom: "1px solid rgba(16,185,129,0.1)" }}>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#10b981" }}>Discovered Workflows</span>
+            <button onClick={() => setActiveSection(null)} className="text-xs" style={{ color: "#a8a29e" }}>Close</button>
+          </div>
+          <div className="p-4 space-y-3">
+            {workflows.map((w, i) => (
+              <div key={i} className="p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: w.automationScore >= 70 ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)", color: w.automationScore >= 70 ? "#10b981" : "#f59e0b" }}>
+                        {w.automationScore}% automatable
+                      </span>
+                      <span className="text-xs uppercase tracking-wider" style={{ color: "#a8a29e" }}>{w.frequency}</span>
+                    </div>
+                    <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
+                    <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{w.description}</p>
+                    {w.agentBlueprint && (
+                      <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)" }}>
+                        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>What an AI agent would do</p>
+                        <p className="text-xs mb-1" style={{ color: "#6b6560" }}>Trigger: {w.agentBlueprint.trigger}</p>
+                        <ol className="text-xs list-decimal pl-4 space-y-0.5" style={{ color: "#6b6560" }}>
+                          {w.agentBlueprint.steps.map((step, j) => <li key={j}>{step}</li>)}
+                        </ol>
+                        {w.agentBlueprint.humanInTheLoop && (
+                          <p className="text-xs mt-1" style={{ color: "#f59e0b" }}>Human stays in loop: {w.agentBlueprint.humanInTheLoop}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {w.estimatedAnnualSavings && <p className="font-fraunces text-lg font-light" style={{ color: "#10b981", letterSpacing: "-0.02em" }}>{w.estimatedAnnualSavings}</p>}
+                    <p className="text-xs" style={{ color: "#a8a29e" }}>{w.estimatedTimeSavings} saved</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* WASTE section */}
+      {activeSection === "waste" && findings.length > 0 && (
+        <div className="mb-8 animate-fade-up rounded-xl overflow-hidden" style={{ border: "2px solid #c4501e" }}>
+          <div className="px-5 py-3 flex items-center justify-between" style={{ background: "rgba(196,80,30,0.04)", borderBottom: "1px solid rgba(196,80,30,0.1)" }}>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#c4501e" }}>Waste Findings</span>
+            <button onClick={() => setActiveSection(null)} className="text-xs" style={{ color: "#a8a29e" }}>Close</button>
+          </div>
+          <div className="p-4 space-y-3">
+            <FindingsList findings={findings} />
+          </div>
+        </div>
+      )}
 
       {/* Mini Command Center */}
       <div className="mt-8 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>

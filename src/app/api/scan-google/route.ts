@@ -390,21 +390,36 @@ ${allFinancialData.join("\n\n").slice(0, 400000)}
 
 ## ANALYSIS INSTRUCTIONS
 
-You have the complete tech stack with pricing AND real financial email data. Run a 7-pass analysis:
+You have the complete tech stack with pricing AND real financial email data. Run ALL of these analysis passes:
 
-1. LICENSE WASTE: For each per-seat tool, estimate inactive seats. If org has ${orgUserCount} users but a tool only has ${Math.floor(orgUserCount * 0.3)} emails of activity, flag the gap. Calculate savings from reducing seats.
-
-2. DUPLICATE TOOLS: Find tools serving the same function (e.g., Asana AND Monday, Slack AND Teams). Recommend consolidation with dollar impact.
-
-3. TIER OPTIMIZATION: For tools with tiered pricing, check if actual usage (email volume, amounts) suggests they're overpaying for a higher tier.
-
+### SPEND INTELLIGENCE (passes 1-7)
+1. LICENSE WASTE: For each per-seat tool, estimate inactive seats. If org has ${orgUserCount} users but a tool only has ${Math.floor(orgUserCount * 0.3)} emails of activity, flag the gap.
+2. DUPLICATE TOOLS: Find tools serving the same function (Asana AND Monday, Slack AND Teams). Recommend consolidation with dollar impact.
+3. TIER OPTIMIZATION: Check if usage suggests they're overpaying for a higher tier.
 4. VENDOR CONSOLIDATION: Multiple tools from same category. Could one vendor replace several?
+5. RENEWAL INTELLIGENCE: Emails mentioning renewal dates, contract expirations, auto-renewal. Build a renewal calendar.
+6. ACTUAL vs ESTIMATED: Compare email amounts to estimated pricing. Flag discrepancies.
+7. TOTAL SPEND: Break down annual SaaS spend by category.
 
-5. RENEWAL INTELLIGENCE: Any renewal/subscription emails approaching dates? Flag for renegotiation.
+### WORKFLOW DISCOVERY (passes 8-12)
+8. RECURRING PROCESSES: Find emails sent on a regular cadence (same sender, similar subject, weekly/monthly pattern). These are manual processes. Example: "Sarah sends 'Weekly Sales Report' every Monday at 8:47am to 3 people." For each: who, what, frequency, recipients.
+9. APPROVAL CHAINS: Find forward chains where email goes A→B→C→B→A. These are approval workflows. Measure: chain depth, time per hop (actual SLA), bottleneck person.
+10. HUMAN MIDDLEWARE: Find people who mostly forward email between groups rather than generating original content. These are people whose job is routing information that an agent could route. High forward ratio + high betweenness = middleware.
+11. TEMPLATE EMAILS: Find emails from the same sender that look nearly identical (same structure, different details). These are manual processes that should be automated.
+12. CROSS-SYSTEM MENTIONS: Find threads that mention multiple systems ("update Salesforce," "check QuickBooks," "add to the spreadsheet"). These are manual integrations between tools.
 
-6. ACTUAL vs ESTIMATED: Where email amounts were found, compare to estimated pricing. Flag discrepancies.
+### AUTOMATION SCOPING (pass 13)
+13. For each discovered workflow, scope what an AI agent would do instead:
+- What triggers the workflow (incoming email, calendar event, time-based)
+- What steps the agent would perform
+- What systems it would integrate with
+- Where a human stays in the loop
+- Time savings per instance and annually
+- Implementation complexity (low/medium/high)
 
-7. TOTAL SPEND PICTURE: Paint the complete annual SaaS spend picture. Break down by category.
+### RISK & KNOWLEDGE (passes 14-15)
+14. KEY PERSON RISK: Vendor relationships concentrated in one person. If they leave, the relationship walks out.
+15. SHADOW IT: Apps sending billing emails that appear to be individual purchases, not org-wide approved tools.
 
 8. SUBSCRIPTION CREEP: Trace when each vendor first appeared in email. Build a timeline of SaaS additions. Flag tools added in the last 6 months that may be trial-to-paid conversions nobody reviewed.
 
@@ -422,14 +437,39 @@ You have the complete tech stack with pricing AND real financial email data. Run
   "summary": {
     "totalAnnualSpend": "${formatCost(totalEstimatedSpendMid)}",
     "totalAnnualWaste": "$X.XM",
+    "totalAutomatableHours": "XXX hours/month",
     "findingsCount": N,
     "criticalCount": N,
     "appsDiscovered": ${techStack.length},
+    "workflowsDiscovered": N,
+    "workflowsAutomatable": N,
     "systemsCrawled": ["Gmail", "Drive", "Calendar"${isAdmin ? ', "Admin Directory"' : ""}],
     "coverageScore": N,
     "topRiskArea": "one sentence",
     "spendByCategory": { "CRM": "$XXK", "Communication": "$XXK", ... }
   },
+  "workflows": [
+    {
+      "name": "Short name like 'Weekly Sales Report' or 'Invoice Approval Chain'",
+      "type": "recurring_report | approval_chain | data_entry | human_middleware | template_email | cross_system",
+      "description": "What this workflow does, who's involved, how it works",
+      "frequency": "daily | weekly | biweekly | monthly | quarterly | ad-hoc",
+      "participants": ["person1@company.com", "person2@company.com"],
+      "avgCycleTime": "2.3 days or 45 minutes",
+      "bottleneck": "The step or person that takes longest",
+      "automationScore": 85,
+      "agentBlueprint": {
+        "trigger": "What starts this workflow",
+        "steps": ["Step 1", "Step 2", "Step 3"],
+        "humanInTheLoop": "Where a human stays involved",
+        "integrationsNeeded": ["Salesforce", "QuickBooks"],
+        "complexity": "low | medium | high"
+      },
+      "estimatedTimeSavings": "4 hours/week",
+      "estimatedAnnualSavings": "$12K",
+      "evidence": "Email patterns that revealed this workflow"
+    }
+  ],
   "findings": [
     {
       "title": "Under 80 chars",
@@ -533,6 +573,13 @@ Respond ONLY with the JSON.`;
           if (gaps) {
             send({ type: "gaps", gaps });
             send({ type: "agent-log", agent: "Atlas", message: `Gap analysis: ${gaps.filter((g: { status?: string }) => g.status === "empty" || !g.status).length} gaps identified. Coverage: ${summary?.coverageScore || 0}%`, logType: "analysis" });
+          }
+
+          // Stream workflows
+          const workflows = parsed.workflows;
+          if (workflows && workflows.length > 0) {
+            send({ type: "workflows", workflows });
+            send({ type: "agent-log", agent: "Signal", message: `Discovered ${workflows.length} workflows. ${workflows.filter((w: { automationScore?: number }) => (w.automationScore || 0) >= 70).length} are automatable.`, logType: "finding" });
           }
 
           const renewalCalendar = parsed.renewalCalendar;
