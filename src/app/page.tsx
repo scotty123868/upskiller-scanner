@@ -351,7 +351,7 @@ function ChooseMode({ startGoogleScan }: {
   startGoogleScan: (admin: boolean) => void;
 }) {
   return (
-    <div className="animate-fade-up max-w-xl">
+    <div className="animate-fade-up max-w-2xl">
       <h1 className="font-fraunces text-3xl md:text-5xl font-light leading-snug md:leading-tight" style={{ letterSpacing: "-0.04em", textWrap: "balance" }}>
         See what your systems are sitting on.
       </h1>
@@ -414,16 +414,16 @@ function ChooseMode({ startGoogleScan }: {
         ].map((item) => (
           <div key={item.label} className="p-3 md:p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
             <p className="text-xs md:text-sm font-semibold mb-1">{item.label}</p>
-            <p className="text-xs leading-relaxed hidden md:block" style={{ color: "#a8a29e" }}>{item.desc}</p>
+            <p className="text-xs leading-relaxed" style={{ color: "#a8a29e" }}>{item.desc}</p>
           </div>
         ))}
       </div>
 
       {/* What happens after */}
-      <div className="mt-8 md:mt-10 p-4 md:p-5 rounded-xl" style={{ background: "#f0ede8" }}>
-        <p className="text-xs md:text-sm font-semibold mb-1 md:mb-2">After the scan</p>
+      <div className="mt-8 md:mt-10 p-4 md:p-5 rounded-xl" style={{ border: "1px solid #ddd8d0", background: "linear-gradient(135deg, rgba(240,237,232,0.5) 0%, rgba(250,249,247,1) 100%)" }}>
+        <p className="text-xs md:text-sm font-semibold mb-1 md:mb-2">What happens next</p>
         <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>
-          Your Command Center populates with everything we found. Gaps show exactly what data to provide next, like AP exports or vendor lists, to unlock deeper findings. Each piece of data you add reveals more waste.
+          Your Command Center populates with everything we found. We discover your workflows, map your tech stack, and identify what's automatable. Gaps show exactly what to provide next to unlock deeper findings.
         </p>
       </div>
 
@@ -470,8 +470,8 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
     <div className="animate-fade-up">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="font-fraunces text-3xl font-light" style={{ letterSpacing: "-0.03em" }}>Agents scanning {sourceLabel}</h2>
-          <p className="mt-2 text-sm" style={{ color: "#6b6560" }}>{progress.message || "Initializing scan..."}</p>
+          <h2 className="font-fraunces text-2xl md:text-3xl font-light" style={{ letterSpacing: "-0.03em" }}>Agents scanning {sourceLabel}</h2>
+          <p className="mt-2 text-xs md:text-sm" style={{ color: "#6b6560" }}>{progress.message || "Initializing scan..."}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#c4501e] animate-pulse-dot" />
@@ -616,27 +616,27 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
   return (
     <div className="animate-fade-up">
       {/* HERO NUMBER */}
-      <div className="text-center py-8 md:py-12 animate-fade-up">
-        <p className="text-sm font-medium mb-3" style={{ color: "#6b6560" }}>Your organization is sitting on</p>
-        <h2 className="font-fraunces text-5xl md:text-7xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
+      <div className="text-center py-6 md:py-12 animate-fade-up">
+        <p className="text-xs md:text-sm font-medium mb-2 md:mb-3" style={{ color: "#6b6560" }}>Your organization is sitting on</p>
+        <h2 className="font-fraunces text-4xl md:text-7xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
           {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}
         </h2>
-        <p className="text-sm mt-3" style={{ color: "#a8a29e" }}>in addressable waste</p>
-        <div className="mt-4 flex items-center justify-center gap-6 text-xs tabular-nums" style={{ color: "#6b6560" }}>
+        <p className="text-xs md:text-sm mt-2 md:mt-3" style={{ color: "#a8a29e" }}>in addressable waste</p>
+        <div className="mt-3 md:mt-4 flex items-center justify-center gap-4 md:gap-6 text-xs tabular-nums" style={{ color: "#6b6560" }}>
           <span><b className="font-semibold">{summary.appsDiscovered || techStack.length}</b> tools</span>
           <span style={{ color: "#ddd8d0" }}>|</span>
           <span><b className="font-semibold">{summary.workflowsDiscovered || workflows.length || "—"}</b> workflows</span>
           <span style={{ color: "#ddd8d0" }}>|</span>
           <span><b className="font-semibold">{summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || "—"}</b> automatable</span>
         </div>
-        <div className="mt-6 flex items-center justify-center gap-3">
+        <div className="mt-5 md:mt-6 flex items-center justify-center gap-3">
           <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
-          <a href="mailto:scotty@upskillerai.com?subject=Scanner%20results%20—%20want%20to%20learn%20more" className="text-xs font-semibold px-4 py-2 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
+          <a href="mailto:scotty@upskillerai.com?subject=Scanner%20results" className="text-xs font-semibold px-4 py-2 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
         </div>
       </div>
 
       {/* THREE PILLARS */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-8">
         {([
           { key: "spend" as const, icon: "💰", label: "SPEND", value: summary.totalAnnualSpend || "—", sub: `across ${summary.appsDiscovered || techStack.length} tools`, color: "#3b82f6" },
           { key: "workflows" as const, icon: "⚡", label: "WORKFLOWS", value: String(summary.workflowsDiscovered || workflows.length || "—"), sub: `${summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || 0} automatable`, color: "#10b981" },

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "UpSkiller Scanner — See what your systems are sitting on",
-  description: "Upload your data. Get findings in minutes. No install, no IT, no commitment.",
+  description: "One click. Our AI agents scan your email to discover every tool, vendor, and subscription you pay for. Map your tech stack, estimate costs, and surface waste in minutes.",
 };
 
 export default function RootLayout({
