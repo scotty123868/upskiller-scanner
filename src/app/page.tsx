@@ -615,27 +615,65 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
 
   return (
     <div className="animate-fade-up">
-      {/* HERO NUMBER */}
-      <div className="text-center py-6 md:py-12 animate-fade-up">
-        <p className="text-xs md:text-sm font-medium mb-2 md:mb-3" style={{ color: "#6b6560" }}>Your organization is sitting on</p>
-        <h2 className="font-fraunces text-4xl md:text-7xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
+      {/* ════════════════════════════════════════ */}
+      {/* THE CINEMATIC REVEAL                  */}
+      {/* ════════════════════════════════════════ */}
+
+      {/* Reveal line 1 */}
+      <div className="text-center pt-4 md:pt-8">
+        <p className="text-xs md:text-sm animate-fade-in reveal-1" style={{ color: "#a8a29e" }}>
+          We scanned {summary.appsDiscovered || techStack.length || "your"} months of email data.
+        </p>
+      </div>
+
+      {/* Reveal line 2 — the tech stack count */}
+      <div className="text-center mt-6 md:mt-8">
+        <p className="text-sm md:text-base font-medium animate-fade-in reveal-2" style={{ color: "#6b6560" }}>
+          We found <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> your organization pays for.
+        </p>
+      </div>
+
+      {/* Reveal line 3 — workflows */}
+      {(workflows.length > 0 || summary.workflowsDiscovered) && (
+        <div className="text-center mt-4 md:mt-6">
+          <p className="text-sm md:text-base font-medium animate-fade-in reveal-3" style={{ color: "#6b6560" }}>
+            <b className="text-[#1a1a1a]">{summary.workflowsDiscovered || workflows.length} manual workflows</b> running on human effort.{" "}
+            <span style={{ color: "#10b981" }}>{summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length} are automatable.</span>
+          </p>
+        </div>
+      )}
+
+      {/* THE BIG NUMBER — the gasp moment */}
+      <div className="text-center mt-8 md:mt-12 mb-4 md:mb-8">
+        <h2 className="font-fraunces text-5xl md:text-8xl font-light animate-count-up reveal-4" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
           {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}
         </h2>
-        <p className="text-xs md:text-sm mt-2 md:mt-3" style={{ color: "#a8a29e" }}>in addressable waste</p>
-        <div className="mt-3 md:mt-4 flex items-center justify-center gap-4 md:gap-6 text-xs tabular-nums" style={{ color: "#6b6560" }}>
-          <span><b className="font-semibold">{summary.appsDiscovered || techStack.length}</b> tools</span>
-          <span style={{ color: "#ddd8d0" }}>|</span>
-          <span><b className="font-semibold">{summary.workflowsDiscovered || workflows.length || "—"}</b> workflows</span>
-          <span style={{ color: "#ddd8d0" }}>|</span>
-          <span><b className="font-semibold">{summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || "—"}</b> automatable</span>
-        </div>
-        <div className="mt-5 md:mt-6 flex items-center justify-center gap-3">
-          <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
-          <a href="mailto:scotty@upskillerai.com?subject=Scanner%20results" className="text-xs font-semibold px-4 py-2 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
+        <p className="text-sm mt-2 md:mt-3 animate-fade-in reveal-5" style={{ color: "#6b6560" }}>
+          in addressable waste — from email alone
+        </p>
+      </div>
+
+      {/* Coverage teaser — the hook */}
+      <div className="text-center mb-8 md:mb-10 animate-fade-in reveal-5">
+        <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full" style={{ background: "#f0ede8" }}>
+          <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "#ddd8d0" }}>
+            <div className="h-full rounded-full coverage-fill" style={{ width: `${summary.coverageScore || 35}%`, background: "linear-gradient(90deg, #c4501e, #f59e0b)" }} />
+          </div>
+          <span className="text-xs font-medium tabular-nums" style={{ color: "#6b6560" }}>
+            {summary.coverageScore || 35}% of the picture — <a href="#gaps" className="underline" style={{ color: "#c4501e" }}>unlock the rest</a>
+          </span>
         </div>
       </div>
 
-      {/* THREE PILLARS */}
+      {/* Action buttons */}
+      <div className="flex items-center justify-center gap-3 mb-10">
+        <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
+        <a href="mailto:scotty@upskillerai.com?subject=Scanner%20found%20waste%20—%20want%20full%20engagement" className="text-xs font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us about a full engagement</a>
+      </div>
+
+      {/* ════════════════════════════════════════ */}
+      {/* THREE PILLARS — doors to explore        */}
+      {/* ════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-8">
         {([
           { key: "spend" as const, icon: "💰", label: "SPEND", value: summary.totalAnnualSpend || "—", sub: `across ${summary.appsDiscovered || techStack.length} tools`, color: "#3b82f6" },
@@ -814,26 +852,34 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
         )}
       </div>
 
-      {/* Intelligent Gap Wizard */}
+      {/* ════════════════════════════════════════ */}
+      {/* THE HOOK — gap wizard as game levels    */}
+      {/* ════════════════════════════════════════ */}
       {gaps.length > 0 && (
-        <div className="mt-10">
-          <div className="flex items-center gap-4 mb-2">
-            <h3 className="font-fraunces text-2xl font-light" style={{ letterSpacing: "-0.02em" }}>I found {summary.coverageScore || 35}% of the picture.</h3>
+        <div className="mt-10 md:mt-16" id="gaps">
+          {/* The emotional hook */}
+          <div className="text-center mb-8 md:mb-10">
+            <h3 className="font-fraunces text-2xl md:text-3xl font-light" style={{ letterSpacing: "-0.03em" }}>
+              We discovered all of this from your email alone.
+            </h3>
+            <p className="mt-3 text-sm md:text-base" style={{ color: "#6b6560" }}>
+              Imagine what we'd find with access to your actual systems.
+            </p>
           </div>
-          <p className="text-sm mb-8 max-w-lg" style={{ color: "#6b6560" }}>
-            Here's exactly what to do next to unlock the rest, ordered by how much more waste each step will reveal.
-          </p>
 
-          {/* Coverage progress */}
-          <div className="mb-8 p-5 rounded-xl" style={{ background: "#f0ede8" }}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#a8a29e" }}>Assessment Coverage</span>
-              <span className="text-sm font-semibold tabular-nums">{summary.coverageScore || 35}%</span>
+          {/* Coverage as game progress */}
+          <div className="mb-8 p-5 md:p-6 rounded-2xl" style={{ background: "#1a1a1a" }}>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Assessment Progress</span>
+              <span className="font-fraunces text-2xl font-light tabular-nums" style={{ color: "rgba(255,255,255,0.9)" }}>{summary.coverageScore || 35}%</span>
             </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#ddd8d0" }}>
-              <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${summary.coverageScore || 35}%`, background: "linear-gradient(90deg, #c4501e 0%, #f59e0b 100%)" }} />
+            <div className="h-3 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-full rounded-full coverage-fill" style={{ width: `${summary.coverageScore || 35}%`, background: "linear-gradient(90deg, #c4501e 0%, #f59e0b 50%, #10b981 100%)" }} />
             </div>
-            <p className="mt-2 text-xs" style={{ color: "#a8a29e" }}>Each step below adds to your coverage. Complete all steps to reach 100%.</p>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Each unlock below fills more of your Command Center</p>
+              <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>{gaps.length} levels remaining</p>
+            </div>
           </div>
 
           {/* Personalized gap steps */}
@@ -1018,15 +1064,20 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
         </div>
       </div>
 
-      {/* CTA */}
-      <div className="mt-12 p-8 rounded-xl" style={{ background: "#1a1a1a" }}>
-        <h3 className="font-fraunces text-xl font-light text-white/90" style={{ letterSpacing: "-0.02em" }}>
-          {scanSource === "file" ? "This is from one file. Imagine what we'd find across all your systems." : `We found ${summary.totalAnnualWaste || "$" + totalSavings.toLocaleString() + "K"} from ${summary.coverageScore || 0}% coverage. Full access unlocks the rest.`}
+      {/* CLOSING CTA */}
+      <div className="mt-12 md:mt-16 p-6 md:p-10 rounded-2xl text-center" style={{ background: "#1a1a1a" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "rgba(255,255,255,0.3)" }}>Ready for the full picture?</p>
+        <h3 className="font-fraunces text-xl md:text-2xl font-light text-white/90 max-w-lg mx-auto" style={{ letterSpacing: "-0.02em" }}>
+          {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`} found from {summary.coverageScore || 35}% visibility.
+          <br />
+          <span style={{ color: "#f59e0b" }}>What's hiding in the other {100 - (summary.coverageScore || 35)}%?</span>
         </h3>
-        <p className="mt-3 text-sm text-white/40 max-w-md leading-relaxed">
-          Two-week engagement. Fixed fee. Read-only access to your actual systems. Our agents connect to everything and run continuously.
+        <p className="mt-4 text-sm text-white/40 max-w-md mx-auto leading-relaxed">
+          Two-week engagement. Fixed fee. We connect to all your systems, run continuously, and surface everything.
         </p>
-        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20waste" className="mt-6 inline-flex text-sm font-semibold px-6 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all">Schedule a walkthrough</a>
+        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || totalSavings + 'K')}%20waste" className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          Schedule a walkthrough
+        </a>
       </div>
     </div>
   );
