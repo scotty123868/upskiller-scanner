@@ -138,6 +138,8 @@ type OrgIntelligence = {
   recurringProcesses: { sender: string; pattern: string; frequency: string; dayOfWeek: string; recipients: number; occurrences: number }[];
   deepThreads: number;
   attachmentThreads: number;
+  gmailLabels: string[];
+  roleInboxes: string[];
 };
 
 export default function Home() {
@@ -171,6 +173,14 @@ export default function Home() {
     setTotalSavings(0);
     setScanError(null);
     setAgentLog([]);
+    setTechStack([]);
+    setGaps([]);
+    setSummary({});
+    setRenewals([]);
+    setAutomations([]);
+    setWorkflows([]);
+    setOrgIntel(null);
+    setActiveSection(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -241,6 +251,11 @@ export default function Home() {
     setTechStack([]);
     setGaps([]);
     setSummary({});
+    setRenewals([]);
+    setAutomations([]);
+    setWorkflows([]);
+    setOrgIntel(null);
+    setActiveSection(null);
 
     addAgentLog("Dispatch", adminMode ? "Initiating full org scan via Google Workspace..." : "Initiating personal account scan via Gmail...", "progress");
 
@@ -936,6 +951,16 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
                 {orgIntel.attachmentThreads} threads with repeated attachments
               </span>
             )}
+            {orgIntel.roleInboxes && orgIntel.roleInboxes.length > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(59,130,246,0.1)", color: "rgba(59,130,246,0.7)" }}>
+                Role inboxes: {orgIntel.roleInboxes.map((r) => r.split("@")[0]).join(", ")}
+              </span>
+            )}
+            {orgIntel.gmailLabels && orgIntel.gmailLabels.length > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>
+                {orgIntel.gmailLabels.length} custom labels
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -1344,7 +1369,7 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
         <p className="mt-4 text-sm text-white/40 max-w-md mx-auto leading-relaxed">
           Two-week engagement. Fixed fee. We connect to all your systems, run continuously, and surface everything.
         </p>
-        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || formatDollarDisplay(totalSavings))}%20waste" className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
+        <a href={`mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || formatDollarDisplay(totalSavings))}%20waste`} className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
           Schedule a walkthrough
         </a>
       </div>

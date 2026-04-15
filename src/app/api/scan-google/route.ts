@@ -210,7 +210,7 @@ export async function POST(request: Request) {
               userId: "me",
               id: batch[i].id!,
               format: "metadata",
-              metadataHeaders: ["From", "To", "Cc", "Subject", "Date", "Content-Type"],
+              metadataHeaders: ["From", "To", "Cc", "Subject", "Date", "Content-Type", "List-Unsubscribe", "Reply-To"],
             });
             const headers = msg.data.payload?.headers || [];
             const getHeader = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
@@ -302,6 +302,32 @@ export async function POST(request: Request) {
         send({ type: "agent-log", agent: "Scout", message: `Gmail metadata: ${err instanceof Error ? err.message.slice(0, 60) : "access denied"}`, logType: "progress" });
       }
 
+      // Fetch Gmail labels for workflow/department signals
+      const gmailLabels: string[] = [];
+      try {
+        const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+        const labelsRes = await gmail.users.labels.list({ userId: "me" });
+        const labels = labelsRes.data.labels || [];
+        for (const l of labels) {
+          if (l.type === "user" && l.name) gmailLabels.push(l.name);
+        }
+        if (gmailLabels.length > 0) {
+          send({ type: "agent-log", agent: "Scout", message: `Found ${gmailLabels.length} custom labels: ${gmailLabels.slice(0, 10).join(", ")}${gmailLabels.length > 10 ? "..." : ""}`, logType: "discovery" });
+        }
+      } catch { /* labels not accessible */ }
+
+      // Detect role inboxes from email addresses
+      const roleInboxes = new Set<string>();
+      const rolePatterns = /^(ops|billing|support|sales|hr|finance|admin|info|team|help|ap|ar|accounting|payroll|recruiting|it|security)@/i;
+      for (const email of allEmailMeta) {
+        for (const addr of [email.from, ...email.to, ...email.cc]) {
+          if (rolePatterns.test(addr)) roleInboxes.add(addr);
+        }
+      }
+      if (roleInboxes.size > 0) {
+        send({ type: "agent-log", agent: "Scout", message: `Detected ${roleInboxes.size} role inboxes: ${[...roleInboxes].slice(0, 5).join(", ")}`, logType: "discovery" });
+      }
+
       send({ type: "progress", records: 100, scanned: 15, message: `${discoveredApps.size} SaaS tools found. Deep scanning financial emails...` });
 
       // ═══════════════════════════════════════
@@ -324,11 +350,14 @@ export async function POST(request: Request) {
           { q: "subject:(billing OR charge OR payment due) newer_than:6m", label: "billing" },
         ];
 
+        const seenMessageIds = new Set<string>(); // Dedupe across searches
+
         for (const search of searches) {
           try {
             const res = await gmail.users.messages.list({ userId: "me", q: search.q, maxResults: 100 });
-            const messages = res.data.messages || [];
+            const messages = (res.data.messages || []).filter((m) => !seenMessageIds.has(m.id!));
             if (messages.length === 0) continue;
+            messages.forEach((m) => seenMessageIds.add(m.id!));
 
             send({ type: "agent-log", agent: "Ledger", message: `Found ${messages.length} ${search.label} emails`, logType: "discovery" });
             totalItems += messages.length;
@@ -403,23 +432,30 @@ export async function POST(request: Request) {
       try {
         const drive = google.drive({ version: "v3", auth: oauth2Client });
         const driveSearches = [
-          { q: "name contains 'contract' or name contains 'agreement' or name contains 'SOW'", cat: "contracts" },
-          { q: "name contains 'invoice' or name contains 'PO' or name contains 'purchase'", cat: "procurement" },
-          { q: "name contains 'budget' or name contains 'vendor' or name contains 'renewal'", cat: "finance" },
-          { q: "mimeType='application/vnd.google-apps.spreadsheet'", cat: "spreadsheet" },
-          { q: "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'", cat: "spreadsheet" },
+          { q: "trashed=false and (name contains 'contract' or name contains 'agreement' or name contains 'SOW')", cat: "contracts" },
+          { q: "trashed=false and (name contains 'invoice' or name contains 'PO' or name contains 'purchase')", cat: "procurement" },
+          { q: "trashed=false and (name contains 'budget' or name contains 'vendor' or name contains 'renewal')", cat: "finance" },
+          { q: "trashed=false and mimeType='application/vnd.google-apps.spreadsheet'", cat: "spreadsheet" },
+          { q: "trashed=false and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'", cat: "spreadsheet" },
         ];
 
+        const seenFileIds = new Set<string>();
         for (const search of driveSearches) {
           try {
             const res = await drive.files.list({
               q: search.q,
               pageSize: 50,
-              fields: "files(name,mimeType,modifiedTime,owners,shared,permissions)",
+              fields: "files(id,name,mimeType,modifiedTime,owners,shared,permissions)",
+              corpora: "allDrives",
+              includeItemsFromAllDrives: true,
+              supportsAllDrives: true,
             });
             const files = res.data.files || [];
             totalItems += files.length;
             for (const f of files) {
+              const fileId = f.id || f.name || "";
+              if (seenFileIds.has(fileId)) continue;
+              seenFileIds.add(fileId);
               allDriveFiles.push({
                 name: f.name || "",
                 mimeType: f.mimeType || "",
@@ -432,18 +468,6 @@ export async function POST(request: Request) {
             }
           } catch { /* skip */ }
         }
-
-        // Deduplicate by name
-        const seen = new Set<string>();
-        const dedupedFiles: DriveFile[] = [];
-        for (const f of allDriveFiles) {
-          if (!seen.has(f.name)) {
-            seen.add(f.name);
-            dedupedFiles.push(f);
-          }
-        }
-        allDriveFiles.length = 0;
-        allDriveFiles.push(...dedupedFiles);
 
         const sharedSpreadsheets = allDriveFiles.filter((f) => f.category === "spreadsheet" && f.shared);
         send({ type: "agent-log", agent: "Quartermaster", message: `${allDriveFiles.length} documents found. ${sharedSpreadsheets.length} shared spreadsheets (potential manual data processes).`, logType: "discovery" });
@@ -461,13 +485,37 @@ export async function POST(request: Request) {
       try {
         const calendar = google.calendar({ version: "v3", auth: oauth2Client });
         const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
-        const calRes = await calendar.events.list({
-          calendarId: "primary",
-          timeMin: sixMonthsAgo.toISOString(),
-          timeMax: new Date().toISOString(),
-          maxResults: 500, singleEvents: true, orderBy: "startTime",
-        });
-        const events = calRes.data.items || [];
+
+        // Scan all accessible calendars, not just primary
+        const calendarIds: string[] = ["primary"];
+        try {
+          const calListRes = await calendar.calendarList.list({ maxResults: 50 });
+          const cals = calListRes.data.items || [];
+          for (const c of cals) {
+            if (c.id && c.id !== "primary" && c.accessRole !== "freeBusyReader") {
+              calendarIds.push(c.id);
+            }
+          }
+          if (calendarIds.length > 1) {
+            send({ type: "agent-log", agent: "Signal", message: `Found ${calendarIds.length} calendars to scan`, logType: "discovery" });
+          }
+        } catch { /* fall back to primary only */ }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allEvents: any[] = [];
+        for (const calId of calendarIds.slice(0, 10)) { // Cap at 10 calendars
+          try {
+            const calRes = await calendar.events.list({
+              calendarId: calId,
+              timeMin: sixMonthsAgo.toISOString(),
+              timeMax: new Date().toISOString(),
+              maxResults: 300, singleEvents: true, orderBy: "startTime",
+            });
+            allEvents.push(...(calRes.data.items || []));
+          } catch { /* skip inaccessible calendars */ }
+        }
+
+        const events = allEvents;
         totalItems += events.length;
 
         for (const e of events) {
@@ -842,6 +890,8 @@ export async function POST(request: Request) {
         recurringProcesses: topCadences,
         deepThreads: deepThreads.length,
         attachmentThreads: heavyAttachmentThreads,
+        gmailLabels: gmailLabels.slice(0, 20),
+        roleInboxes: [...roleInboxes].slice(0, 10),
       });
 
       send({ type: "progress", records: 100, scanned: 65, message: `Cost model: ${displaySpend}/yr across ${techStack.length} tools. Running Opus deep analysis...` });
@@ -878,6 +928,8 @@ export async function POST(request: Request) {
         `\nAttachment patterns:`,
         `  - ${attachmentEmails.length} emails with attachments`,
         `  - ${heavyAttachmentThreads} threads with 2+ attachments (potential manual data exchange)`,
+        ...(gmailLabels.length > 0 ? [`\nGmail labels (user-created):`, `  - ${gmailLabels.join(", ")}`] : []),
+        ...(roleInboxes.size > 0 ? [`\nRole inboxes detected:`, `  - ${[...roleInboxes].join(", ")}`] : []),
       ].join("\n");
 
       // Cadence patterns summary

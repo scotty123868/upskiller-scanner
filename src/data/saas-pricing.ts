@@ -1,7 +1,7 @@
 /**
  * SaaS Pricing Intelligence Database
  *
- * 500+ tools with domain patterns, categories, and typical per-seat pricing.
+ * 180+ tools with domain patterns, categories, and typical per-seat pricing.
  * Pricing is approximate (industry benchmarks, public pricing pages) and
  * used for estimation, not billing. "Low" = starter/basic tier, "mid" =
  * professional/business tier, "high" = enterprise tier.
