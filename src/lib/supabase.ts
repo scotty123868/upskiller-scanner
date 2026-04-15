@@ -122,6 +122,8 @@ CREATE TABLE IF NOT EXISTS scans (
   gaps JSONB DEFAULT '[]',
   renewals JSONB DEFAULT '[]',
   automations JSONB DEFAULT '[]',
+  workflows JSONB DEFAULT '[]',
+  org_intelligence JSONB DEFAULT '{}',
   findings_count INT DEFAULT 0,
   total_waste TEXT,
   coverage_score INT DEFAULT 0,
@@ -203,6 +205,8 @@ export async function createScan(userId: string, source: string) {
 export async function completeScan(scanId: string, results: {
   summary?: Record<string, unknown>; techStack?: unknown[]; gaps?: unknown[]; renewals?: unknown[];
   automations?: unknown[];
+  workflows?: unknown[];
+  orgIntelligence?: Record<string, unknown>;
   findingsCount?: number;
   totalWaste?: string;
   coverageScore?: number;
@@ -218,6 +222,8 @@ export async function completeScan(scanId: string, results: {
       gaps: results.gaps || [],
       renewals: results.renewals || [],
       automations: results.automations || [],
+      workflows: results.workflows || [],
+      org_intelligence: results.orgIntelligence || {},
       findings_count: results.findingsCount || 0,
       total_waste: results.totalWaste,
       coverage_score: results.coverageScore || 0,
@@ -296,13 +302,28 @@ export async function recordScanCost(userId: string, costCents: number) {
   });
 
   if (rpcError) {
-    // RPC not deployed yet — fall back to upsert (still better than read-modify-write)
-    await supabaseAdmin
+    // RPC not deployed yet — fall back to insert-or-increment
+    const { data: existing } = await supabaseAdmin
       .from("rate_limits")
-      .upsert(
-        { user_id: userId, month, scan_count: 1, estimated_cost_cents: costCents },
-        { onConflict: "user_id,month" }
-      );
+      .select("scan_count, estimated_cost_cents")
+      .eq("user_id", userId)
+      .eq("month", month)
+      .single();
+
+    if (existing) {
+      await supabaseAdmin
+        .from("rate_limits")
+        .update({
+          scan_count: existing.scan_count + 1,
+          estimated_cost_cents: existing.estimated_cost_cents + costCents,
+        })
+        .eq("user_id", userId)
+        .eq("month", month);
+    } else {
+      await supabaseAdmin
+        .from("rate_limits")
+        .insert({ user_id: userId, month, scan_count: 1, estimated_cost_cents: costCents });
+    }
   }
 }
 

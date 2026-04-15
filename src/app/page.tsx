@@ -2,29 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-// Count-up animation hook
-function useCountUp(target: number, duration = 1500, delay = 2000) {
-  const [value, setValue] = useState(0);
-  const [started, setStarted] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setStarted(true), delay);
-    return () => clearTimeout(timer);
-  }, [delay]);
-  useEffect(() => {
-    if (!started || target === 0) return;
-    const startTime = Date.now();
-    const tick = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      setValue(Math.round(target * eased));
-      if (progress < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, [started, target, duration]);
-  return value;
-}
-
 // Parse dollar string to a raw number in dollars (not thousands).
 // "$2.3M" → 2300000, "$340K" → 340000, "$500" → 500
 function parseDollarToRaw(s: string): number {
@@ -44,13 +21,6 @@ function formatDollarDisplay(raw: number): string {
   if (raw >= 1_000_000) return `${(raw / 1_000_000).toFixed(1)}M`;
   if (raw >= 1_000) return `${Math.round(raw / 1_000).toLocaleString()}K`;
   return `${Math.round(raw).toLocaleString()}`;
-}
-
-function CountUpDollar({ value, className, style }: { value: string; className?: string; style?: React.CSSProperties }) {
-  const target = parseDollarToRaw(value);
-  const animated = useCountUp(target, 1800, 2000);
-  const display = formatDollarDisplay(animated);
-  return <span className={className} style={style}>${display}</span>;
 }
 
 type Finding = {
@@ -401,7 +371,13 @@ export default function Home() {
               type: l.log_type || "progress",
             })));
           }
-          setScanSource("google-personal");
+          if (s.workflows && s.workflows.length > 0) {
+            setWorkflows(s.workflows);
+          }
+          if (s.org_intelligence && Object.keys(s.org_intelligence).length > 0) {
+            setOrgIntel(s.org_intelligence as OrgIntelligence);
+          }
+          setScanSource(s.source || "google-personal");
           setMode("done");
         } else {
           setMode("choose");
@@ -449,7 +425,6 @@ export default function Home() {
         {mode === "done" && (
           <DoneView
             findings={findings}
-            totalSavings={totalSavings}
             agentLog={agentLog}
             techStack={techStack}
             gaps={gaps}
@@ -752,9 +727,8 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
 }
 
 /* ─── DONE VIEW ─── */
-function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, renewals, automations, workflows, orgIntel, activeSection, setActiveSection, handleFile, onReset }: {
+function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, automations, workflows, orgIntel, activeSection, setActiveSection, handleFile, onReset }: {
   findings: Finding[];
-  totalSavings: number;
   agentLog: AgentLogEntry[];
   techStack: TechStackApp[];
   gaps: GapItem[];
@@ -791,11 +765,23 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
       {/* moment. It's the thing they can verify.  */}
       {/* ════════════════════════════════════════ */}
 
-      <div className="mt-8 md:mt-10 mb-8 md:mb-10">
-        <h2 className="font-fraunces text-2xl md:text-4xl font-light text-center animate-fade-in reveal-2" style={{ letterSpacing: "-0.03em" }}>
-          Here&apos;s how your organization actually operates.
-        </h2>
-      </div>
+      {/* Hero text — only when we have real data to show */}
+      {(orgIntel || workflows.length > 0 || findings.length > 0) ? (
+        <div className="mt-8 md:mt-10 mb-8 md:mb-10">
+          <h2 className="font-fraunces text-2xl md:text-4xl font-light text-center animate-fade-in reveal-2" style={{ letterSpacing: "-0.03em" }}>
+            Here&apos;s how your organization actually operates.
+          </h2>
+        </div>
+      ) : (
+        <div className="mt-8 md:mt-10 mb-8 md:mb-10 text-center">
+          <h2 className="font-fraunces text-2xl md:text-3xl font-light animate-fade-in reveal-2" style={{ letterSpacing: "-0.03em" }}>
+            We found {summary.appsDiscovered || techStack.length} tools in your email.
+          </h2>
+          <p className="mt-3 text-sm" style={{ color: "#6b6560" }}>
+            This scan gave us a baseline. To see recurring processes, vendor relationships, and automation opportunities, we&apos;d need access to a work email with team communication.
+          </p>
+        </div>
+      )}
 
       {orgIntel && (
         <div className="mb-10 rounded-2xl overflow-hidden animate-fade-in reveal-3" style={{ background: "#1a1a1a" }}>
@@ -932,6 +918,45 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
       )}
 
       {/* ════════════════════════════════════════ */}
+      {/* TOP ACTIONS — the "what to do" block    */}
+      {/* ════════════════════════════════════════ */}
+      {(findings.length > 0 || automatableWorkflows.length > 0) && (
+        <div className="mb-10">
+          <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>
+            Your top actions
+          </h3>
+          <div className="grid md:grid-cols-3 gap-3">
+            {/* Top spend/waste finding */}
+            {findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1).map((f) => (
+              <div key={f.id} className="p-4 rounded-xl" style={{ border: "2px solid #c4501e", background: "rgba(196,80,30,0.03)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#c4501e" }}>Fix first</p>
+                <h4 className="text-sm font-semibold mb-1">{f.title}</h4>
+                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{f.description?.slice(0, 120)}{(f.description?.length || 0) > 120 ? "..." : ""}</p>
+                {f.amount && <p className="mt-2 text-sm font-semibold" style={{ color: "#c4501e" }}>{f.amount}</p>}
+              </div>
+            ))}
+            {/* Top automatable workflow */}
+            {automatableWorkflows.slice(0, 1).map((w, i) => (
+              <div key={i} className="p-4 rounded-xl" style={{ border: "2px solid #10b981", background: "rgba(16,185,129,0.03)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>Automate this</p>
+                <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
+                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{w.description?.slice(0, 120)}{(w.description?.length || 0) > 120 ? "..." : ""}</p>
+                {w.estimatedTimeSavings && <p className="mt-2 text-sm font-semibold" style={{ color: "#10b981" }}>{w.estimatedTimeSavings} saved</p>}
+              </div>
+            ))}
+            {/* Key risk / operational insight */}
+            {findings.filter((f) => f.category === "Risk" || f.category === "Knowledge" || f.category === "Operations").slice(0, 1).map((f) => (
+              <div key={f.id} className="p-4 rounded-xl" style={{ border: "2px solid #f59e0b", background: "rgba(245,158,11,0.03)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Watch out</p>
+                <h4 className="text-sm font-semibold mb-1">{f.title}</h4>
+                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{f.description?.slice(0, 120)}{(f.description?.length || 0) > 120 ? "..." : ""}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════ */}
       {/* WORKFLOWS — the automatable stuff       */}
       {/* This is shown inline, not behind a      */}
       {/* click. If we found workflows, show them. */}
@@ -962,10 +987,10 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
                     {w.evidence && (
                       <p className="mt-2 text-xs italic" style={{ color: "#a8a29e" }}>Evidence: {w.evidence}</p>
                     )}
-                    {w.agentBlueprint && (
+                    {w.agentBlueprint && Array.isArray(w.agentBlueprint.steps) && (
                       <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)" }}>
                         <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>What an AI agent would do instead</p>
-                        <p className="text-xs mb-1" style={{ color: "#6b6560" }}>Trigger: {w.agentBlueprint.trigger}</p>
+                        {w.agentBlueprint.trigger && <p className="text-xs mb-1" style={{ color: "#6b6560" }}>Trigger: {w.agentBlueprint.trigger}</p>}
                         <ol className="text-xs list-decimal pl-4 space-y-0.5" style={{ color: "#6b6560" }}>
                           {w.agentBlueprint.steps.map((step: string, j: number) => <li key={j}>{step}</li>)}
                         </ol>
@@ -1344,11 +1369,13 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
 
 /* ─── SHARED COMPONENTS ─── */
 function FindingsList({ findings }: { findings: Finding[] }) {
-  const colors = {
+  const colors: Record<string, { bg: string; text: string }> = {
     critical: { bg: "rgba(196,80,30,0.08)", text: "#c4501e" },
     high: { bg: "rgba(245,158,11,0.08)", text: "#f59e0b" },
     medium: { bg: "rgba(59,130,246,0.08)", text: "#3b82f6" },
+    low: { bg: "rgba(168,162,158,0.08)", text: "#a8a29e" },
   };
+  const defaultColor = { bg: "rgba(168,162,158,0.08)", text: "#a8a29e" };
   const agentColors: Record<string, string> = {
     Ledger: "#60a5fa", Quartermaster: "#f59e0b", Chief: "#c4501e",
     Scout: "#4ade80", Signal: "#a78bfa", Atlas: "#f0abfc",
@@ -1366,7 +1393,7 @@ function FindingsList({ findings }: { findings: Finding[] }) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: colors[f.severity].bg, color: colors[f.severity].text }}>{f.severity}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: (colors[f.severity] || defaultColor).bg, color: (colors[f.severity] || defaultColor).text }}>{f.severity}</span>
                 <span className="text-xs uppercase tracking-wider font-medium" style={{ color: "#a8a29e" }}>{f.category}</span>
                 {f.agent && (
                   <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: agentColors[f.agent] || "#a8a29e" }}>{f.agent}</span>

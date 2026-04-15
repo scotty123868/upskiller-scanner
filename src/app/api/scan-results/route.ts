@@ -59,6 +59,8 @@ export async function GET(request: Request) {
       ...scan,
       findings: findings || [],
       agentLogs: agentLogs || [],
+      workflows: scan.workflows || [],
+      org_intelligence: scan.org_intelligence || null,
     },
   });
 }

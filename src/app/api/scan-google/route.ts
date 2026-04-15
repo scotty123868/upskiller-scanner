@@ -515,13 +515,30 @@ export async function POST(request: Request) {
           } catch { /* skip inaccessible calendars */ }
         }
 
-        const events = allEvents;
+        // Deduplicate events across calendars by iCalUID + start time
+        const seenEventKeys = new Set<string>();
+        const events = allEvents.filter((e) => {
+          const key = `${e.iCalUID || e.id}::${e.start?.dateTime || e.start?.date || ""}`;
+          if (seenEventKeys.has(key)) return false;
+          seenEventKeys.add(key);
+          return true;
+        });
         totalItems += events.length;
 
         for (const e of events) {
-          const start = e.start?.dateTime ? new Date(e.start.dateTime) : null;
-          const end = e.end?.dateTime ? new Date(e.end.dateTime) : null;
-          const duration = start && end ? Math.round((end.getTime() - start.getTime()) / 60000) : 0;
+          // Handle both timed events and all-day events
+          let duration = 0;
+          if (e.start?.dateTime && e.end?.dateTime) {
+            const start = new Date(e.start.dateTime);
+            const end = new Date(e.end.dateTime);
+            duration = Math.round((end.getTime() - start.getTime()) / 60000);
+          } else if (e.start?.date && e.end?.date) {
+            // All-day event: count as 8 hours per day
+            const start = new Date(e.start.date);
+            const end = new Date(e.end.date);
+            const days = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+            duration = days * 480; // 8 hours per day
+          }
 
           // Extract attendee domains (external only)
           const attendeeDomains = new Set<string>();
@@ -647,6 +664,10 @@ export async function POST(request: Request) {
         const fromDomain = fromAddr.split("@")[1] || "";
         const isInternal = fromDomain === userDomain;
 
+        // Skip automated/noreply senders for comm graph (they're noise)
+        const senderLocal = fromAddr.split("@")[0] || "";
+        if (/^(noreply|no-reply|notifications|mailer|bounce|donotreply|updates|news|newsletter)$/i.test(senderLocal)) continue;
+
         // Track node
         if (!commNodes.has(fromAddr)) {
           commNodes.set(fromAddr, { email: fromAddr, domain: fromDomain, sent: 0, received: 0, isInternal });
@@ -709,8 +730,20 @@ export async function POST(request: Request) {
 
       const senderSubjectGroups = new Map<string, { dates: Date[]; subjects: string[]; recipients: Set<string> }>();
 
+      // Known automated/noreply domains to exclude from cadence detection
+      const automatedPrefixes = /^(noreply|no-reply|notifications|mailer|bounce|donotreply|updates|news|newsletter|alert|digest)/i;
+
       for (const email of allEmailMeta) {
         if (!email.from || !email.subject) continue;
+        // Skip replies and forwards (we want original sends, not chain responses)
+        if (email.isReply || email.isForward) continue;
+        // Skip automated/noreply senders
+        const senderLocal = email.from.split("@")[0] || "";
+        if (automatedPrefixes.test(senderLocal)) continue;
+        // Only include senders from the org domain (internal processes)
+        // or keep external if org domain is unknown (personal gmail)
+        if (userDomain && email.domain !== userDomain) continue;
+
         const key = `${email.from}::${normalizeSubject(email.subject)}`;
         if (!senderSubjectGroups.has(key)) {
           senderSubjectGroups.set(key, { dates: [], subjects: [], recipients: new Set() });
@@ -719,7 +752,7 @@ export async function POST(request: Request) {
         const d = new Date(email.date);
         if (!isNaN(d.getTime())) group.dates.push(d);
         if (group.subjects.length < 5) group.subjects.push(email.subject);
-        for (const r of email.to) group.recipients.add(r);
+        for (const r of [...email.to, ...email.cc]) group.recipients.add(r);
       }
 
       // Detect recurring patterns (3+ occurrences with regular intervals)
@@ -869,8 +902,7 @@ export async function POST(request: Request) {
         occurrences: p.count,
       }));
 
-      send({
-        type: "orgIntelligence",
+      const orgIntelData = {
         emailsAnalyzed: allEmailMeta.length,
         financialEmails: allFinancialEmails.length,
         calendarEvents: allCalendarEvents.length,
@@ -892,7 +924,8 @@ export async function POST(request: Request) {
         attachmentThreads: heavyAttachmentThreads,
         gmailLabels: gmailLabels.slice(0, 20),
         roleInboxes: [...roleInboxes].slice(0, 10),
-      });
+      };
+      send({ type: "orgIntelligence", ...orgIntelData });
 
       send({ type: "progress", records: 100, scanned: 65, message: `Cost model: ${displaySpend}/yr across ${techStack.length} tools. Running Opus deep analysis...` });
 
@@ -1231,6 +1264,8 @@ RULES:
                 gaps,
                 renewals: renewalCalendar,
                 automations: automationOpps,
+                workflows: workflows || [],
+                orgIntelligence: orgIntelData,
                 findingsCount: findings.length,
                 totalWaste: summary?.totalAnnualWaste,
                 coverageScore: summary?.coverageScore,
