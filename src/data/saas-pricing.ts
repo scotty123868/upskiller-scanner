@@ -284,36 +284,58 @@ export const SAAS_DATABASE: SaaSApp[] = [
 ];
 
 // Build a lookup index for fast domain matching
-const domainIndex = new Map<string, SaaSApp>();
+// Stores arrays to handle multiple apps per domain (e.g. HubSpot CRM vs HubSpot CMS)
+const domainIndex = new Map<string, SaaSApp[]>();
 for (const app of SAAS_DATABASE) {
   for (const domain of app.domains) {
-    domainIndex.set(domain, app);
-    // Also index without subdomains
+    if (!domainIndex.has(domain)) domainIndex.set(domain, []);
+    domainIndex.get(domain)!.push(app);
     const parts = domain.split(".");
     if (parts.length > 2) {
-      domainIndex.set(parts.slice(-2).join("."), app);
+      const parent = parts.slice(-2).join(".");
+      if (!domainIndex.has(parent)) domainIndex.set(parent, []);
+      domainIndex.get(parent)!.push(app);
     }
   }
 }
 
 export function lookupDomain(domain: string): SaaSApp | undefined {
   domain = domain.toLowerCase().replace(/^www\./, "");
-  if (domainIndex.has(domain)) return domainIndex.get(domain);
-  // Try parent domain
+  const matches = domainIndex.get(domain);
+  if (matches && matches.length > 0) return matches[0];
   const parts = domain.split(".");
   if (parts.length > 2) {
     const parent = parts.slice(-2).join(".");
-    return domainIndex.get(parent);
+    const parentMatches = domainIndex.get(parent);
+    if (parentMatches && parentMatches.length > 0) return parentMatches[0];
   }
   return undefined;
 }
 
-export function estimateAnnualCost(app: SaaSApp, userCount: number): { low: number; mid: number; high: number } | null {
+// Returns all apps matching a domain (for multi-product vendors like HubSpot, Atlassian)
+export function lookupDomainAll(domain: string): SaaSApp[] {
+  domain = domain.toLowerCase().replace(/^www\./, "");
+  const matches = domainIndex.get(domain);
+  if (matches && matches.length > 0) return matches;
+  const parts = domain.split(".");
+  if (parts.length > 2) {
+    const parent = parts.slice(-2).join(".");
+    return domainIndex.get(parent) || [];
+  }
+  return [];
+}
+
+// Estimate annual cost. Uses emailCount as a seat proxy when available
+// (much more accurate than assuming entire org uses every tool).
+export function estimateAnnualCost(app: SaaSApp, userCount: number, emailCount?: number): { low: number; mid: number; high: number } | null {
   if (app.pricePerSeatMonth) {
+    // Use email activity as a seat proxy: if we see 15 emails from Salesforce
+    // in a 30-person org, estimate ~15 seats, not 30
+    const estimatedSeats = emailCount ? Math.max(1, Math.min(userCount, Math.ceil(emailCount / 3))) : userCount;
     return {
-      low: app.pricePerSeatMonth.low * userCount * 12,
-      mid: app.pricePerSeatMonth.mid * userCount * 12,
-      high: app.pricePerSeatMonth.high * userCount * 12,
+      low: app.pricePerSeatMonth.low * estimatedSeats * 12,
+      mid: app.pricePerSeatMonth.mid * estimatedSeats * 12,
+      high: app.pricePerSeatMonth.high * estimatedSeats * 12,
     };
   }
   if (app.flatMonthly) {

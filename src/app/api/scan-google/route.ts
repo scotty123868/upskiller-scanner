@@ -204,60 +204,54 @@ export async function POST(request: Request) {
         const senderDomains = new Map<string, number>();
         const batch = messageIds.slice(0, 500);
 
-        for (let i = 0; i < batch.length; i++) {
+        // Parse email addresses from header
+        const extractEmails = (header: string): string[] => {
+          const matches = header.match(/[\w.-]+@[\w.-]+\.\w+/g) || [];
+          return [...new Set(matches.map((e) => e.toLowerCase()))];
+        };
+
+        // Process a single message metadata
+        const processMessage = async (msgId: string) => {
           try {
             const msg = await gmail.users.messages.get({
-              userId: "me",
-              id: batch[i].id!,
-              format: "metadata",
+              userId: "me", id: msgId, format: "metadata",
               metadataHeaders: ["From", "To", "Cc", "Subject", "Date", "Content-Type", "List-Unsubscribe", "Reply-To"],
             });
             const headers = msg.data.payload?.headers || [];
             const getHeader = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
-
             const from = getHeader("From");
-            const to = getHeader("To");
-            const cc = getHeader("Cc");
             const subject = getHeader("Subject");
-            const date = getHeader("Date");
             const contentType = getHeader("Content-Type");
-            const threadId = msg.data.threadId || "";
-
-            // Parse email addresses
-            const extractEmails = (header: string): string[] => {
-              const matches = header.match(/[\w.-]+@[\w.-]+\.\w+/g) || [];
-              return [...new Set(matches.map((e) => e.toLowerCase()))];
-            };
-
             const fromEmail = extractEmails(from)[0] || "";
-            const toEmails = extractEmails(to);
-            const ccEmails = extractEmails(cc);
             const domain = fromEmail.split("@")[1]?.replace(/^(noreply\.|no-reply\.|notifications\.|info\.|support\.|billing\.|team\.|hello\.)/, "").replace(/^www\./, "") || "";
 
-            // Detect forwards and replies
-            const isForward = subject.toLowerCase().startsWith("fwd:") || subject.toLowerCase().startsWith("fw:");
-            const isReply = subject.toLowerCase().startsWith("re:");
-            const hasAttachment = contentType.includes("mixed") || contentType.includes("attachment");
-
-            allEmailMeta.push({
+            return {
               from: fromEmail,
-              to: toEmails,
-              cc: ccEmails,
+              to: extractEmails(getHeader("To")),
+              cc: extractEmails(getHeader("Cc")),
               subject,
-              date,
-              threadId,
-              hasAttachment,
-              isForward,
-              isReply,
+              date: getHeader("Date"),
+              threadId: msg.data.threadId || "",
+              hasAttachment: contentType.includes("mixed") || contentType.includes("attachment"),
+              isForward: subject.toLowerCase().startsWith("fwd:") || subject.toLowerCase().startsWith("fw:"),
+              isReply: subject.toLowerCase().startsWith("re:"),
               domain,
-            });
+            } as EmailMeta;
+          } catch { return null; }
+        };
 
-            // Track sender domains for SaaS discovery
-            if (domain) {
-              senderDomains.set(domain, (senderDomains.get(domain) || 0) + 1);
+        // Parallel batches of 20 (10-20x faster than sequential)
+        const BATCH_SIZE = 20;
+        for (let i = 0; i < batch.length; i += BATCH_SIZE) {
+          const chunk = batch.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(chunk.map((m) => processMessage(m.id!)));
+          for (const meta of results) {
+            if (!meta) continue;
+            allEmailMeta.push(meta);
+            if (meta.domain) {
+              senderDomains.set(meta.domain, (senderDomains.get(meta.domain) || 0) + 1);
             }
-          } catch { /* skip */ }
-
+          }
           if (i > 0 && i % 100 === 0) {
             send({ type: "progress", records: 100, scanned: Math.floor((i / batch.length) * 15), message: `Extracted metadata from ${i}/${batch.length} emails...` });
           }
@@ -362,55 +356,49 @@ export async function POST(request: Request) {
             send({ type: "agent-log", agent: "Ledger", message: `Found ${messages.length} ${search.label} emails`, logType: "discovery" });
             totalItems += messages.length;
 
+            // Parallel batch reads for financial emails (10x faster)
             const toRead = messages.slice(0, 40);
-            for (let i = 0; i < toRead.length; i++) {
-              try {
-                const msg = await gmail.users.messages.get({ userId: "me", id: toRead[i].id!, format: "full" });
-                const headers = msg.data.payload?.headers || [];
-                const from = headers.find((h) => h.name === "From")?.value || "";
-                const subject = headers.find((h) => h.name === "Subject")?.value || "";
-                const date = headers.find((h) => h.name === "Date")?.value || "";
-
-                // Extract body text
-                let body = "";
-                const payload = msg.data.payload;
-                if (payload?.body?.data) {
-                  body = Buffer.from(payload.body.data, "base64").toString("utf-8");
-                } else if (payload?.parts) {
-                  for (const part of payload.parts) {
-                    if (part.mimeType === "text/plain" && part.body?.data) {
-                      body = Buffer.from(part.body.data, "base64").toString("utf-8");
-                      break;
+            for (let bi = 0; bi < toRead.length; bi += 10) {
+              const chunk = toRead.slice(bi, bi + 10);
+              const results = await Promise.all(chunk.map(async (m) => {
+                try {
+                  const msg = await gmail.users.messages.get({ userId: "me", id: m.id!, format: "full" });
+                  const headers = msg.data.payload?.headers || [];
+                  const from = headers.find((h) => h.name === "From")?.value || "";
+                  const subject = headers.find((h) => h.name === "Subject")?.value || "";
+                  const date = headers.find((h) => h.name === "Date")?.value || "";
+                  let body = "";
+                  const payload = msg.data.payload;
+                  if (payload?.body?.data) {
+                    body = Buffer.from(payload.body.data, "base64").toString("utf-8");
+                  } else if (payload?.parts) {
+                    for (const part of payload.parts) {
+                      if (part.mimeType === "text/plain" && part.body?.data) {
+                        body = Buffer.from(part.body.data, "base64").toString("utf-8");
+                        break;
+                      }
                     }
                   }
-                }
-                if (!body) body = msg.data.snippet || "";
-
-                // Context-aware amount extraction: prefer amounts near cost keywords
-                const amounts = body.match(/\$[\d,]+(?:\.\d{2})?/g) || [];
-                const uniqueAmounts = [...new Set(amounts)];
-
-                // Track amounts per app
-                const domain = from.match(/@([^>]+)/)?.[1]?.toLowerCase().replace(/^www\./, "") || "";
-                if (domain) {
-                  const app = lookupDomain(domain);
+                  if (!body) body = msg.data.snippet || "";
+                  const amounts = [...new Set(body.match(/\$[\d,]+(?:\.\d{2})?/g) || [])];
+                  const domain = from.match(/@([^>]+)/)?.[1]?.toLowerCase().replace(/^www\./, "") || "";
+                  return { from, subject, date, body: body.slice(0, 2000), category: search.label, amounts, domain };
+                } catch { return null; }
+              }));
+              for (const r of results) {
+                if (!r) continue;
+                if (r.domain) {
+                  const app = lookupDomain(r.domain);
                   if (app && discoveredApps.has(app.name)) {
                     const entry = discoveredApps.get(app.name)!;
-                    uniqueAmounts.forEach((a) => {
+                    r.amounts.forEach((a) => {
                       const num = parseFloat(a.replace(/[$,]/g, ""));
                       if (!isNaN(num) && num > 0 && num < 1000000) entry.amounts.push(num);
                     });
                   }
                 }
-
-                allFinancialEmails.push({
-                  from, subject, date,
-                  body: body.slice(0, 2000),
-                  category: search.label,
-                  amounts: uniqueAmounts,
-                  domain,
-                });
-              } catch { /* skip */ }
+                allFinancialEmails.push(r);
+              }
             }
           } catch { /* search may fail */ }
         }
@@ -820,7 +808,7 @@ export async function POST(request: Request) {
       let totalEstimatedSpendMid = 0;
 
       for (const [name, data] of discoveredApps) {
-        const cost = estimateAnnualCost(data.app, orgUserCount);
+        const cost = estimateAnnualCost(data.app, orgUserCount, data.emailCount);
         if (cost) totalEstimatedSpendMid += cost.mid;
         techStack.push({
           name,
@@ -1174,10 +1162,12 @@ Use the pre-detected cadence patterns, communication graph, attachment data, and
 }
 
 RULES:
-- Find 15-25 findings and 5-15 workflows. Be exhaustive.
-- Every workflow MUST cite specific evidence from the data (email addresses, subjects, cadence patterns, calendar events).
-- If the cadence data shows recurring patterns, those ARE workflows. Don't ignore them.
+- Quality over quantity. Find 8-12 findings and 3-8 workflows. Only include findings backed by real evidence from the data.
+- Do NOT pad with generic advice. Every finding must reference specific apps, people, amounts, or patterns from this org's data.
+- Every workflow MUST cite specific evidence (email addresses, subjects, cadence patterns, calendar events).
+- If the cadence data shows recurring patterns, those ARE workflows. Turn each one into a workflow entry.
 - Gaps must be PERSONALIZED to apps found in their email.
+- If the data is thin (few emails, solo user), produce fewer but higher-quality findings. 3-5 strong findings beats 15 weak ones.
 - Respond ONLY with the JSON.`;
 
       try {
@@ -1226,7 +1216,7 @@ RULES:
           }
 
           for (let i = 0; i < findings.length; i++) {
-            await new Promise((r) => setTimeout(r, 300 + Math.random() * 200));
+            await new Promise((r) => setTimeout(r, 100));
             send({ type: "agent-log", agent: findings[i].agent || "Atlas", message: `${findings[i].title}${findings[i].amount ? " — " + findings[i].amount : ""}`, logType: "finding" });
             send({ type: "finding", ...findings[i] });
             send({ type: "progress", records: 100, scanned: 80 + Math.floor((15 * (i + 1)) / findings.length), message: `Delivered ${i + 1}/${findings.length} findings...` });

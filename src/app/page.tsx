@@ -213,7 +213,6 @@ export default function Home() {
 
   const startGoogleScan = useCallback(async (adminMode: boolean) => {
     setScanSource(adminMode ? "google-admin" : "google-personal");
-    setMode("scanning");
     setFindings([]);
     setTotalSavings(0);
     setScanError(null);
@@ -227,7 +226,8 @@ export default function Home() {
     setOrgIntel(null);
     setActiveSection(null);
 
-    addAgentLog("Dispatch", adminMode ? "Initiating full org scan via Google Workspace..." : "Initiating personal account scan via Gmail...", "progress");
+    // Show loading spinner while we check if OAuth is needed
+    setMode("loading");
 
     try {
       const scopes = adminMode
@@ -235,7 +235,7 @@ export default function Home() {
         : "gmail-readonly";
       const res = await fetch(`/api/scan-google?mode=${adminMode ? "admin" : "personal"}&scopes=${scopes}`, { method: "POST" });
       if (!res.ok) {
-        // If 401, redirect to Google OAuth
+        // If 401, redirect to Google OAuth (stay in loading state during redirect)
         if (res.status === 401) {
           const { authUrl } = await res.json();
           window.location.href = authUrl;
@@ -247,6 +247,10 @@ export default function Home() {
         }
         throw new Error("Scan failed. Please try again.");
       }
+
+      // Token valid, stream starting. NOW show scanning UI.
+      setMode("scanning");
+      addAgentLog("Dispatch", adminMode ? "Initiating full org scan..." : "Initiating personal scan...", "progress");
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
