@@ -1,8 +1,10 @@
+import Link from "next/link";
+
 export default function Terms() {
   return (
     <div className="min-h-screen" style={{ background: "#faf9f7", fontFamily: "'Inter', sans-serif" }}>
       <nav className="px-5 md:px-18 h-14 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
-        <a href="/" className="font-fraunces font-medium text-base" style={{ letterSpacing: "-0.03em" }}>UpSkiller</a>
+        <Link href="/" className="font-fraunces font-medium text-base" style={{ letterSpacing: "-0.03em" }}>UpSkiller</Link>
       </nav>
       <main className="max-w-2xl mx-auto px-6 py-12 md:py-20">
         <h1 className="font-fraunces text-3xl md:text-4xl font-light mb-8" style={{ letterSpacing: "-0.03em" }}>Terms of Service</h1>
@@ -10,7 +12,7 @@ export default function Terms() {
           <p>Last updated: April 14, 2026</p>
 
           <h2 className="text-lg font-semibold text-[#1a1a1a] pt-4">Service description</h2>
-          <p>UpSkiller Scanner is an AI-powered operational intelligence tool that analyzes your organization's email, documents, and calendar data to discover tech stack usage, identify operational waste, map manual workflows, and recommend automations.</p>
+          <p>UpSkiller Scanner is an AI-powered operational intelligence tool that analyzes your organization&apos;s email, documents, and calendar data to discover tech stack usage, identify operational waste, map manual workflows, and recommend automations.</p>
 
           <h2 className="text-lg font-semibold text-[#1a1a1a] pt-4">Access and use</h2>
           <p>By using UpSkiller Scanner, you confirm that you have authorization to grant read-only access to the Google Workspace or Microsoft account you connect. You are responsible for ensuring you have appropriate permissions from your organization.</p>
@@ -25,7 +27,7 @@ export default function Terms() {
           <p>Free scans are limited to prevent abuse. Each user account is limited to a reasonable number of scans per month.</p>
 
           <h2 className="text-lg font-semibold text-[#1a1a1a] pt-4">Limitation of liability</h2>
-          <p>UpSkiller Scanner is provided "as is." We are not liable for any business decisions made based on scan results. Our findings are informational and should be verified independently.</p>
+          <p>UpSkiller Scanner is provided &ldquo;as is.&rdquo; We are not liable for any business decisions made based on scan results. Our findings are informational and should be verified independently.</p>
 
           <h2 className="text-lg font-semibold text-[#1a1a1a] pt-4">Contact</h2>
           <p>Questions about these terms? Email <a href="mailto:scotty@upskillerai.com" className="underline text-[#3b82f6]">scotty@upskillerai.com</a>.</p>

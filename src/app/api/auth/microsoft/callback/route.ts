@@ -8,9 +8,19 @@ const REDIRECT_URI = `${process.env.NEXTAUTH_URL || "https://upskiller-scanner.v
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const returnedState = url.searchParams.get("state") || "";
 
   if (!code) {
     return NextResponse.redirect(new URL("/?error=no_code", request.url));
+  }
+
+  // CSRF protection: verify state parameter matches cookie
+  const cookieHeader = request.headers.get("cookie") || "";
+  const storedStateMatch = cookieHeader.match(/oauth_state=([^;]+)/);
+  const storedState = storedStateMatch?.[1] || "";
+
+  if (!storedState || storedState !== returnedState) {
+    return NextResponse.redirect(new URL("/?error=csrf_failed", request.url));
   }
 
   try {
@@ -53,6 +63,8 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.redirect(new URL("/?scan=ready&mode=microsoft", request.url));
+    // Clear the CSRF state cookie
+    response.cookies.set("oauth_state", "", { httpOnly: true, secure: true, sameSite: "lax", maxAge: 0, path: "/" });
     response.cookies.set("scan_token", tokens.access_token, {
       httpOnly: true, secure: true, sameSite: "lax", maxAge: 3600, path: "/",
     });

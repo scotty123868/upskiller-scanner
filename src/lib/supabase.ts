@@ -273,9 +273,9 @@ export async function checkRateLimit(userId: string): Promise<{ allowed: boolean
     return { allowed: true, scansUsed: 0, costCents: 0 };
   }
 
-  // $1 max per user per month = 100 cents
-  // Opus scan costs ~15-50 cents per scan
-  const MAX_COST_CENTS = 100;
+  // $10 max per user per month = 1000 cents
+  // Opus scan costs ~30-80 cents per scan
+  const MAX_COST_CENTS = 1000;
   return {
     allowed: data.estimated_cost_cents < MAX_COST_CENTS,
     scansUsed: data.scan_count,
@@ -287,26 +287,34 @@ export async function recordScanCost(userId: string, costCents: number) {
   if (!isConfigured || !userId) return;
   const month = new Date().toISOString().slice(0, 7);
 
-  // Upsert rate limit record
-  const { data: existing } = await supabaseAdmin
-    .from("rate_limits")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("month", month)
-    .single();
+  // Try atomic increment via Postgres RPC first (race-safe).
+  // Falls back to upsert + read-modify-write if the RPC doesn't exist yet.
+  const { error: rpcError } = await supabaseAdmin.rpc("increment_rate_limit", {
+    p_user_id: userId,
+    p_month: month,
+    p_cost: costCents,
+  });
 
-  if (existing) {
+  if (rpcError) {
+    // RPC not deployed yet — fall back to upsert (still better than read-modify-write)
     await supabaseAdmin
       .from("rate_limits")
-      .update({
-        scan_count: existing.scan_count + 1,
-        estimated_cost_cents: existing.estimated_cost_cents + costCents,
-      })
-      .eq("user_id", userId)
-      .eq("month", month);
-  } else {
-    await supabaseAdmin
-      .from("rate_limits")
-      .insert({ user_id: userId, month, scan_count: 1, estimated_cost_cents: costCents });
+      .upsert(
+        { user_id: userId, month, scan_count: 1, estimated_cost_cents: costCents },
+        { onConflict: "user_id,month" }
+      );
   }
 }
+
+// SQL to create the atomic increment function in Supabase:
+// CREATE OR REPLACE FUNCTION increment_rate_limit(p_user_id UUID, p_month TEXT, p_cost INT)
+// RETURNS VOID AS $$
+// BEGIN
+//   INSERT INTO rate_limits (user_id, month, scan_count, estimated_cost_cents)
+//   VALUES (p_user_id, p_month, 1, p_cost)
+//   ON CONFLICT (user_id, month)
+//   DO UPDATE SET
+//     scan_count = rate_limits.scan_count + 1,
+//     estimated_cost_cents = rate_limits.estimated_cost_cents + p_cost;
+// END;
+// $$ LANGUAGE plpgsql;

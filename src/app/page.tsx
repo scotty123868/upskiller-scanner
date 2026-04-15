@@ -25,23 +25,32 @@ function useCountUp(target: number, duration = 1500, delay = 2000) {
   return value;
 }
 
-// Parse dollar string to number: "$2.3M" → 2300, "$340K" → 340
-function parseDollarAmount(s: string): { num: number; suffix: string } {
-  if (!s) return { num: 0, suffix: "" };
+// Parse dollar string to a raw number in dollars (not thousands).
+// "$2.3M" → 2300000, "$340K" → 340000, "$500" → 500
+function parseDollarToRaw(s: string): number {
+  if (!s) return 0;
   const cleaned = s.replace(/[^0-9.KMBkmb]/g, "");
   const numPart = parseFloat(cleaned) || 0;
-  if (s.toUpperCase().includes("M")) return { num: numPart * 1000, suffix: "M" };
-  if (s.toUpperCase().includes("B")) return { num: numPart * 1000000, suffix: "B" };
-  return { num: numPart, suffix: "K" };
+  const upper = s.toUpperCase();
+  if (upper.includes("B")) return numPart * 1_000_000_000;
+  if (upper.includes("M")) return numPart * 1_000_000;
+  if (upper.includes("K")) return numPart * 1_000;
+  return numPart; // raw dollar amount, no suffix
+}
+
+// Format a raw dollar amount for display
+function formatDollarDisplay(raw: number): string {
+  if (raw >= 1_000_000_000) return `${(raw / 1_000_000_000).toFixed(1)}B`;
+  if (raw >= 1_000_000) return `${(raw / 1_000_000).toFixed(1)}M`;
+  if (raw >= 1_000) return `${Math.round(raw / 1_000).toLocaleString()}K`;
+  return `${Math.round(raw).toLocaleString()}`;
 }
 
 function CountUpDollar({ value, className, style }: { value: string; className?: string; style?: React.CSSProperties }) {
-  const parsed = parseDollarAmount(value);
-  const animated = useCountUp(parsed.num, 1800, 2000);
-  const display = parsed.suffix === "M" ? `$${(animated / 1000).toFixed(1)}M` :
-    parsed.suffix === "B" ? `$${(animated / 1000000).toFixed(1)}B` :
-    `$${animated.toLocaleString()}K`;
-  return <span className={className} style={style}>{display}</span>;
+  const target = parseDollarToRaw(value);
+  const animated = useCountUp(target, 1800, 2000);
+  const display = formatDollarDisplay(animated);
+  return <span className={className} style={style}>${display}</span>;
 }
 
 type Finding = {
@@ -58,7 +67,7 @@ type Finding = {
   timeToValue?: string;
 };
 
-type ScanMode = "choose" | "uploading" | "scanning" | "done";
+type ScanMode = "loading" | "choose" | "uploading" | "scanning" | "done";
 
 type AgentLogEntry = {
   id: number;
@@ -109,14 +118,36 @@ type ScanSummary = {
   spendByCategory?: Record<string, string>;
 };
 
+type OrgIntelligence = {
+  emailsAnalyzed: number;
+  financialEmails: number;
+  calendarEvents: number;
+  driveDocuments: number;
+  orgDomain: string;
+  orgSize: number;
+  internalContacts: number;
+  externalDomains: number;
+  meetingHours6mo: number;
+  recurringMeetings: number;
+  externalMeetings: number;
+  videoTools: string[];
+  sharedSpreadsheets: number;
+  humanMiddleware: { email: string; forwardRatio: number }[];
+  topCommunicators: { email: string; sent: number; received: number; total: number }[];
+  topVendorMeetings: { domain: string; meetings: number }[];
+  recurringProcesses: { sender: string; pattern: string; frequency: string; dayOfWeek: string; recipients: number; occurrences: number }[];
+  deepThreads: number;
+  attachmentThreads: number;
+};
+
 export default function Home() {
-  const [mode, setMode] = useState<ScanMode>("choose");
+  const [mode, setMode] = useState<ScanMode>("loading");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
   const [scanProgress, setScanProgress] = useState({ records: 0, scanned: 0, message: "" });
-  const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState("");
   const [totalSavings, setTotalSavings] = useState(0);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [scanSource, setScanSource] = useState<"file" | "google-admin" | "google-personal">("file");
   const [techStack, setTechStack] = useState<TechStackApp[]>([]);
   const [gaps, setGaps] = useState<GapItem[]>([]);
@@ -125,8 +156,7 @@ export default function Home() {
   const [automations, setAutomations] = useState<{ process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[]>([]);
   const [workflows, setWorkflows] = useState<{ name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[]>([]);
   const [activeSection, setActiveSection] = useState<"spend" | "workflows" | "waste" | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [orgIntel, setOrgIntel] = useState<OrgIntelligence | null>(null);
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -139,6 +169,7 @@ export default function Home() {
     setMode("uploading");
     setFindings([]);
     setTotalSavings(0);
+    setScanError(null);
     setAgentLog([]);
 
     const formData = new FormData();
@@ -171,23 +202,31 @@ export default function Home() {
           if (data === "[DONE]") { setMode("done"); continue; }
           try {
             const event = JSON.parse(data);
-            if (event.type === "progress") {
+            if (event.type === "error") {
+              setScanError(event.message || "Analysis failed. Please try again.");
+              setMode("choose");
+              return;
+            } else if (event.type === "agent-log") {
+              addAgentLog(event.agent, event.message, event.logType || "progress");
+            } else if (event.type === "progress") {
               setScanProgress(event);
-              if (event.message) addAgentLog("Scout", event.message, "progress");
+            } else if (event.type === "summary") {
+              setSummary(event);
             } else if (event.type === "finding") {
               findingId++;
               const finding: Finding = { id: findingId, ...event };
               setFindings((prev) => [...prev, finding]);
-              addAgentLog("Ledger", `${event.title}${event.amount ? " — " + event.amount : ""}`, "finding");
+              addAgentLog(event.agent || "Ledger", `${event.title}${event.amount ? " — " + event.amount : ""}`, "finding");
               if (event.amount) {
-                const num = parseInt(event.amount.replace(/[^0-9]/g, ""));
-                if (!isNaN(num)) setTotalSavings((prev) => prev + num);
+                const raw = parseDollarToRaw(event.amount);
+                if (raw > 0) setTotalSavings((prev) => prev + raw);
               }
             }
           } catch { /* skip */ }
         }
       }
-    } catch {
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Scan failed. Please try again.");
       setMode("choose");
     }
   }, [addAgentLog]);
@@ -197,6 +236,7 @@ export default function Home() {
     setMode("scanning");
     setFindings([]);
     setTotalSavings(0);
+    setScanError(null);
     setAgentLog([]);
     setTechStack([]);
     setGaps([]);
@@ -216,7 +256,11 @@ export default function Home() {
           window.location.href = authUrl;
           return;
         }
-        throw new Error("Scan failed");
+        if (res.status === 429) {
+          const data = await res.json();
+          throw new Error(data.error || "Rate limit exceeded. Please try again later.");
+        }
+        throw new Error("Scan failed. Please try again.");
       }
 
       const reader = res.body?.getReader();
@@ -237,13 +281,19 @@ export default function Home() {
           if (data === "[DONE]") { setMode("done"); continue; }
           try {
             const event = JSON.parse(data);
-            if (event.type === "agent-log") {
+            if (event.type === "error") {
+              setScanError(event.message || "Analysis failed. Please try again.");
+              setMode("choose");
+              return;
+            } else if (event.type === "agent-log") {
               addAgentLog(event.agent, event.message, event.logType || "progress");
             } else if (event.type === "progress") {
               setScanProgress(event);
             } else if (event.type === "techStack") {
               setTechStack(event.apps || []);
               setSummary((prev) => ({ ...prev, totalAnnualSpend: event.totalEstimatedSpend, appsDiscovered: event.appCount }));
+            } else if (event.type === "orgIntelligence") {
+              setOrgIntel(event as unknown as OrgIntelligence);
             } else if (event.type === "summary") {
               setSummary(event);
               if (event.renewalCalendar) setRenewals(event.renewalCalendar);
@@ -261,38 +311,49 @@ export default function Home() {
               setFindings((prev) => [...prev, { id: findingId, ...event }]);
               addAgentLog(event.agent || "Ledger", `${event.title}${event.amount ? " — " + event.amount : ""}`, "finding");
               if (event.amount) {
-                const num = parseInt(event.amount.replace(/[^0-9]/g, ""));
-                if (!isNaN(num)) setTotalSavings((prev) => prev + num);
+                const raw = parseDollarToRaw(event.amount);
+                if (raw > 0) setTotalSavings((prev) => prev + raw);
               }
             }
           } catch { /* skip */ }
         }
       }
-    } catch {
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Scan failed. Please try again.");
       setMode("choose");
     }
   }, [addAgentLog]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
-
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-    else if (e.type === "dragleave") setDragActive(false);
-  }, []);
-
-  // Check for OAuth callback OR load saved results
+  // Check for OAuth callback, errors, OR load saved results
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("scan") === "ready") {
-      const adminMode = params.get("mode") === "admin";
+
+    // Handle OAuth errors from redirects
+    const error = params.get("error");
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        no_code: "Authentication failed. No authorization code received.",
+        auth_failed: "Authentication failed. Please try signing in again.",
+        csrf_failed: "Security check failed. Please try signing in again.",
+      };
+      setScanError(errorMessages[error] || `Authentication error: ${error}`);
       window.history.replaceState({}, "", "/");
+      setMode("choose");
+      return;
+    }
+
+    if (params.get("scan") === "ready") {
+      const scanMode = params.get("mode") || "crawl";
+      window.history.replaceState({}, "", "/");
+
+      // Microsoft OAuth completed but scanning not yet implemented
+      if (scanMode === "microsoft") {
+        setScanError("Microsoft scanning is coming soon. Your account was connected successfully. Please use Google sign-in for scanning in the meantime.");
+        setMode("choose");
+        return;
+      }
+
+      const adminMode = scanMode === "admin";
       startGoogleScan(adminMode);
       return;
     }
@@ -311,8 +372,8 @@ export default function Home() {
           if (s.findings) {
             setFindings(s.findings.map((f: Record<string, unknown>, i: number) => ({ ...f, id: i + 1 })));
             const total = s.findings.reduce((sum: number, f: Record<string, unknown>) => {
-              const amt = typeof f.amount === "string" ? parseInt(f.amount.replace(/[^0-9]/g, "")) : 0;
-              return sum + (isNaN(amt) ? 0 : amt);
+              if (typeof f.amount !== "string") return sum;
+              return sum + parseDollarToRaw(f.amount);
             }, 0);
             setTotalSavings(total);
           }
@@ -327,17 +388,36 @@ export default function Home() {
           }
           setScanSource("google-personal");
           setMode("done");
+        } else {
+          setMode("choose");
         }
       })
-      .catch(() => { /* no saved results, show landing page */ });
+      .catch(() => { setMode("choose"); });
   }, [startGoogleScan]);
 
   return (
     <div className="min-h-screen">
       <Nav />
       <main className="pt-24 md:pt-32 px-5 md:px-18 max-w-5xl mx-auto pb-16">
+        {scanError && (
+          <div className="mb-6 p-4 rounded-xl flex items-start gap-3" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="mt-0.5 flex-shrink-0">
+              <circle cx="10" cy="10" r="9" stroke="#ef4444" strokeWidth="1.5"/>
+              <path d="M10 6v5M10 13.5v.5" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: "#991b1b" }}>{scanError}</p>
+              <button onClick={() => setScanError(null)} className="text-xs mt-1 underline" style={{ color: "#b91c1c" }}>Dismiss</button>
+            </div>
+          </div>
+        )}
+        {mode === "loading" && (
+          <div className="flex items-center justify-center py-32">
+            <div className="w-5 h-5 rounded-full border-2 border-[#c4501e] border-t-transparent animate-spin" />
+          </div>
+        )}
         {mode === "choose" && (
-          <ChooseMode startGoogleScan={startGoogleScan} />
+          <ChooseMode startGoogleScan={startGoogleScan} setScanError={setScanError} />
         )}
         {mode === "uploading" && <UploadingState fileName={fileName} />}
         {mode === "scanning" && (
@@ -355,7 +435,6 @@ export default function Home() {
           <DoneView
             findings={findings}
             totalSavings={totalSavings}
-            scanSource={scanSource}
             agentLog={agentLog}
             techStack={techStack}
             gaps={gaps}
@@ -363,10 +442,11 @@ export default function Home() {
             renewals={renewals}
             automations={automations}
             workflows={workflows}
+            orgIntel={orgIntel}
             activeSection={activeSection}
             setActiveSection={setActiveSection}
             handleFile={handleFile}
-            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); setRenewals([]); setAutomations([]); setWorkflows([]); setActiveSection(null); }}
+            onReset={() => { setMode("choose"); setFindings([]); setTotalSavings(0); setAgentLog([]); setTechStack([]); setGaps([]); setSummary({}); setRenewals([]); setAutomations([]); setWorkflows([]); setActiveSection(null); setOrgIntel(null); }}
           />
         )}
       </main>
@@ -389,8 +469,9 @@ function Nav() {
 }
 
 /* ─── CHOOSE MODE ─── */
-function ChooseMode({ startGoogleScan }: {
+function ChooseMode({ startGoogleScan, setScanError }: {
   startGoogleScan: (admin: boolean) => void;
+  setScanError: (error: string | null) => void;
 }) {
   return (
     <div className="animate-fade-up max-w-2xl">
@@ -427,19 +508,36 @@ function ChooseMode({ startGoogleScan }: {
 
       {/* Google warning note */}
       <p className="mt-3 text-xs leading-relaxed" style={{ color: "#a8a29e" }}>
-        Google will show a security warning because we're new. Click <b style={{ color: "#6b6560" }}>Advanced</b> then <b style={{ color: "#6b6560" }}>"Go to upskiller-scanner.vercel.app"</b> to proceed safely. We only read your email metadata, never store anything.
+        Google will show a security warning because we&apos;re new. Click <b style={{ color: "#6b6560" }}>Advanced</b> then <b style={{ color: "#6b6560" }}>&ldquo;Go to upskiller-scanner.vercel.app&rdquo;</b> to proceed safely. We read email content for financial analysis but never store raw emails.
       </p>
 
       {/* Alternative sign-in options */}
       <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <a
-          href="/api/auth/microsoft"
-          className="text-center py-2.5 px-5 text-sm font-medium rounded-full transition-all hover:bg-[#f0ede8] flex items-center justify-center gap-2"
+        <button
+          onClick={async () => {
+            try {
+              const res = await fetch("/api/auth/microsoft", { redirect: "manual" });
+              if (res.status === 501) {
+                setScanError("Microsoft sign-in is not yet available. Please use Google sign-in for now.");
+                return;
+              }
+              // Follow the redirect
+              const redirectUrl = res.headers.get("Location");
+              if (redirectUrl) {
+                window.location.href = redirectUrl;
+              } else {
+                window.location.href = "/api/auth/microsoft";
+              }
+            } catch {
+              window.location.href = "/api/auth/microsoft";
+            }
+          }}
+          className="text-center py-2.5 px-5 text-sm font-medium rounded-full transition-all hover:bg-[#f0ede8] flex items-center justify-center gap-2 cursor-pointer"
           style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}
         >
           <svg width="14" height="14" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
           Sign in with Microsoft
-        </a>
+        </button>
         <button
           onClick={() => startGoogleScan(true)}
           className="text-xs font-medium transition-colors hover:text-[#1a1a1a] cursor-pointer py-2"
@@ -470,7 +568,7 @@ function ChooseMode({ startGoogleScan }: {
       <div className="mt-8 md:mt-10 p-4 md:p-5 rounded-xl" style={{ border: "1px solid #ddd8d0", background: "linear-gradient(135deg, rgba(240,237,232,0.5) 0%, rgba(250,249,247,1) 100%)" }}>
         <p className="text-xs md:text-sm font-semibold mb-1 md:mb-2">What happens next</p>
         <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>
-          Your Command Center populates with everything we found. We discover your workflows, map your tech stack, and identify what's automatable. Gaps show exactly what to provide next to unlock deeper findings.
+          Your Command Center populates with everything we found. We sample recent emails, Drive metadata, and calendar events to discover your workflows, map your tech stack, and identify what&apos;s automatable. Gaps show exactly what to provide next to unlock deeper findings.
         </p>
       </div>
 
@@ -536,7 +634,7 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
           <div className="mt-3 flex items-center gap-6">
             <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{progress.scanned.toLocaleString()}</b> / {progress.records.toLocaleString()} records</span>
             <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{findings.length}</b> findings</span>
-            {totalSavings > 0 && <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#c4501e] font-semibold">${totalSavings.toLocaleString()}K</b> surfaced</span>}
+            {totalSavings > 0 && <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#c4501e] font-semibold">${formatDollarDisplay(totalSavings)}</b> surfaced</span>}
           </div>
         </div>
       )}
@@ -639,10 +737,9 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
 }
 
 /* ─── DONE VIEW ─── */
-function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gaps, summary, renewals, automations, workflows, activeSection, setActiveSection, handleFile, onReset }: {
+function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, renewals, automations, workflows, orgIntel, activeSection, setActiveSection, handleFile, onReset }: {
   findings: Finding[];
   totalSavings: number;
-  scanSource: string;
   agentLog: AgentLogEntry[];
   techStack: TechStackApp[];
   gaps: GapItem[];
@@ -650,6 +747,7 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
   renewals: { vendor: string; renewalDate: string; estimatedCost: string; action: string; urgency: string }[];
   automations: { process: string; evidence: string; estimatedTimeSavings: string; recommendedTool: string; complexity: string }[];
   workflows: { name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[];
+  orgIntel: OrgIntelligence | null;
   activeSection: "spend" | "workflows" | "waste" | null;
   setActiveSection: (s: "spend" | "workflows" | "waste" | null) => void;
   handleFile: (file: File) => void;
@@ -658,7 +756,7 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
   const criticalCount = findings.filter((f) => f.severity === "critical").length;
   const highCount = findings.filter((f) => f.severity === "high").length;
   const gapFileRef = useRef<HTMLInputElement>(null);
-  const [activeGap, setActiveGap] = useState<string | null>(null);
+  const automatableWorkflows = workflows.filter(w => w.automationScore >= 70);
 
   return (
     <div className="animate-fade-up">
@@ -666,41 +764,44 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
       {/* THE CINEMATIC REVEAL                  */}
       {/* ════════════════════════════════════════ */}
 
-      {/* Reveal line 1 */}
+      {/* Reveal line 1 — what we actually analyzed (real numbers) */}
       <div className="text-center pt-4 md:pt-8">
         <p className="text-xs md:text-sm animate-fade-in reveal-1" style={{ color: "#a8a29e" }}>
-          We scanned {summary.appsDiscovered || techStack.length || "your"} months of email data.
+          We analyzed {orgIntel ? `${orgIntel.emailsAnalyzed.toLocaleString()} emails, ${orgIntel.calendarEvents} calendar events, and ${orgIntel.driveDocuments} documents` : "your recent email, calendar, and drive data"}.
         </p>
       </div>
 
-      {/* Reveal line 2 — the tech stack count */}
+      {/* Reveal line 2 — the org fingerprint */}
       <div className="text-center mt-6 md:mt-8">
         <p className="text-sm md:text-base font-medium animate-fade-in reveal-2" style={{ color: "#6b6560" }}>
-          We found <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> your organization pays for.
+          {orgIntel && orgIntel.orgSize > 1
+            ? <>Your <b className="text-[#1a1a1a]">{orgIntel.orgSize}-person team</b> uses <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> and spends <b className="text-[#1a1a1a]">{orgIntel.meetingHours6mo}h in meetings</b> every 6 months.</>
+            : <>We found <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> in your workflow{orgIntel ? ` and ${orgIntel.meetingHours6mo}h of meetings over 6 months` : ""}.</>
+          }
         </p>
       </div>
 
-      {/* Reveal line 3 — workflows */}
-      {(workflows.length > 0 || summary.workflowsDiscovered) && (
+      {/* Reveal line 3 — workflows (the magic line) */}
+      {(workflows.length > 0 || (orgIntel && orgIntel.recurringProcesses.length > 0)) && (
         <div className="text-center mt-4 md:mt-6">
           <p className="text-sm md:text-base font-medium animate-fade-in reveal-3" style={{ color: "#6b6560" }}>
-            <b className="text-[#1a1a1a]">{summary.workflowsDiscovered || workflows.length} manual workflows</b> running on human effort.{" "}
-            <span style={{ color: "#10b981" }}>{summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length} are automatable.</span>
+            We detected <b className="text-[#1a1a1a]">{summary.workflowsDiscovered || workflows.length} recurring processes</b> running on human effort.{" "}
+            <span style={{ color: "#10b981" }}><b>{summary.workflowsAutomatable || automatableWorkflows.length}</b> can be automated.</span>
           </p>
         </div>
       )}
 
-      {/* THE BIG NUMBER — the gasp moment with count-up */}
+      {/* THE BIG NUMBER — the gasp moment */}
       <div className="text-center mt-8 md:mt-12 mb-4 md:mb-8">
         <h2 className="font-fraunces text-5xl md:text-8xl font-light animate-count-up reveal-4" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
-          <CountUpDollar value={summary.totalAnnualWaste || `$${totalSavings}K`} />
+          <CountUpDollar value={summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`} />
         </h2>
         <p className="text-sm mt-2 md:mt-3 animate-fade-in reveal-5" style={{ color: "#6b6560" }}>
-          in addressable waste — from email alone
+          in addressable waste {summary.totalAutomatableHours ? `and ${summary.totalAutomatableHours} of automatable work` : ""} — from email alone
         </p>
       </div>
 
-      {/* Coverage teaser — the hook */}
+      {/* Coverage teaser */}
       <div className="text-center mb-8 md:mb-10 animate-fade-in reveal-5">
         <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full" style={{ background: "#f0ede8" }}>
           <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "#ddd8d0" }}>
@@ -719,13 +820,134 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
       </div>
 
       {/* ════════════════════════════════════════ */}
+      {/* ORG INTELLIGENCE — the "how do they     */}
+      {/* know this?" section                     */}
+      {/* ════════════════════════════════════════ */}
+      {orgIntel && (orgIntel.recurringProcesses.length > 0 || orgIntel.topCommunicators.length > 0 || orgIntel.topVendorMeetings.length > 0) && (
+        <div className="mb-10 rounded-2xl overflow-hidden" style={{ background: "#1a1a1a" }}>
+          <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>What we learned about your organization</p>
+          </div>
+
+          {/* Quick stats row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "rgba(255,255,255,0.06)" }}>
+            {[
+              { label: "People", value: orgIntel.orgSize, sub: orgIntel.orgDomain || "detected" },
+              { label: "External partners", value: orgIntel.externalDomains, sub: `${orgIntel.externalMeetings} meetings` },
+              { label: "Recurring processes", value: orgIntel.recurringProcesses.length, sub: "detected from email" },
+              { label: "Meeting load", value: `${Math.round(orgIntel.meetingHours6mo / 26)}h/wk`, sub: `${orgIntel.recurringMeetings} recurring` },
+            ].map((stat) => (
+              <div key={stat.label} className="p-4" style={{ background: "#1a1a1a" }}>
+                <p className="text-xs uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>{stat.label}</p>
+                <p className="mt-1 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{stat.value}</p>
+                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.2)" }}>{stat.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Recurring processes — the magic */}
+          {orgIntel.recurringProcesses.length > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#10b981" }}>
+                Recurring processes we detected
+              </p>
+              <div className="space-y-2">
+                {orgIntel.recurringProcesses.slice(0, 6).map((p, i) => (
+                  <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded mt-0.5 flex-shrink-0" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}>{p.frequency}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{p.pattern}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                        {p.sender.split("@")[0]} sends this {p.frequency}{p.dayOfWeek !== "Sunday" ? ` (usually ${p.dayOfWeek}s)` : ""} to {p.recipients} {p.recipients === 1 ? "person" : "people"} — {p.occurrences} times in 6 months
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vendor relationships from calendar */}
+          {orgIntel.topVendorMeetings.length > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#3b82f6" }}>
+                Vendor relationships (from calendar)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {orgIntel.topVendorMeetings.map((v) => (
+                  <span key={v.domain} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(59,130,246,0.1)", color: "rgba(59,130,246,0.8)" }}>
+                    {v.domain} <span style={{ opacity: 0.5 }}>{v.meetings} meetings</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Key people + risk signals */}
+          {(orgIntel.topCommunicators.length > 0 || orgIntel.humanMiddleware.length > 0) && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="grid md:grid-cols-2 gap-4">
+                {orgIntel.topCommunicators.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.3)" }}>Highest volume communicators</p>
+                    {orgIntel.topCommunicators.slice(0, 4).map((c) => (
+                      <div key={c.email} className="flex items-center justify-between py-1.5">
+                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{c.email.split("@")[0]}</span>
+                        <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: "rgba(255,255,255,0.25)" }}>{c.total} emails</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {orgIntel.humanMiddleware.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Information routers</p>
+                    <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>People who mostly forward rather than originate email. These roles may be partially automatable.</p>
+                    {orgIntel.humanMiddleware.map((h) => (
+                      <div key={h.email} className="flex items-center justify-between py-1.5">
+                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{h.email.split("@")[0]}</span>
+                        <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: "#f59e0b" }}>{h.forwardRatio}% forwarded</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Video tools + shared spreadsheets */}
+          <div className="px-5 py-4 flex flex-wrap gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            {orgIntel.videoTools.length > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>
+                Video: {orgIntel.videoTools.join(", ")}
+              </span>
+            )}
+            {orgIntel.sharedSpreadsheets > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                {orgIntel.sharedSpreadsheets} shared spreadsheets (manual data exchange)
+              </span>
+            )}
+            {orgIntel.deepThreads > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>
+                {orgIntel.deepThreads} deep email threads (5+ replies)
+              </span>
+            )}
+            {orgIntel.attachmentThreads > 0 && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }}>
+                {orgIntel.attachmentThreads} threads with repeated attachments
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════ */}
       {/* THREE PILLARS — doors to explore        */}
       {/* ════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-8">
         {([
           { key: "spend" as const, icon: "💰", label: "SPEND", value: summary.totalAnnualSpend || "—", sub: `across ${summary.appsDiscovered || techStack.length} tools`, color: "#3b82f6" },
-          { key: "workflows" as const, icon: "⚡", label: "WORKFLOWS", value: String(summary.workflowsDiscovered || workflows.length || "—"), sub: `${summary.workflowsAutomatable || workflows.filter(w => w.automationScore >= 70).length || 0} automatable`, color: "#10b981" },
-          { key: "waste" as const, icon: "🔍", label: "WASTE", value: summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`, sub: `${findings.length} findings`, color: "#c4501e" },
+          { key: "workflows" as const, icon: "⚡", label: "WORKFLOWS", value: String(summary.workflowsDiscovered || workflows.length || "—"), sub: `${summary.workflowsAutomatable || automatableWorkflows.length || 0} automatable`, color: "#10b981" },
+          { key: "waste" as const, icon: "🔍", label: "WASTE", value: summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`, sub: `${findings.length} findings`, color: "#c4501e" },
         ]).map((pillar) => (
           <button
             key={pillar.key}
@@ -848,7 +1070,7 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
           </div>
           <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Waste Found</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`}</p>
+            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`}</p>
           </div>
           <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Apps</p>
@@ -910,7 +1132,7 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
               We discovered all of this from your email alone.
             </h3>
             <p className="mt-3 text-sm md:text-base" style={{ color: "#6b6560" }}>
-              Imagine what we'd find with access to your actual systems.
+              Imagine what we&apos;d find with access to your actual systems.
             </p>
           </div>
 
@@ -1115,14 +1337,14 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
       <div className="mt-12 md:mt-16 p-6 md:p-10 rounded-2xl text-center" style={{ background: "#1a1a1a" }}>
         <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "rgba(255,255,255,0.3)" }}>Ready for the full picture?</p>
         <h3 className="font-fraunces text-xl md:text-2xl font-light text-white/90 max-w-lg mx-auto" style={{ letterSpacing: "-0.02em" }}>
-          {summary.totalAnnualWaste || `$${totalSavings.toLocaleString()}K`} found from {summary.coverageScore || 35}% visibility.
+          {summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`} found from {summary.coverageScore || 35}% visibility.
           <br />
-          <span style={{ color: "#f59e0b" }}>What's hiding in the other {100 - (summary.coverageScore || 35)}%?</span>
+          <span style={{ color: "#f59e0b" }}>What&apos;s hiding in the other {100 - (summary.coverageScore || 35)}%?</span>
         </h3>
         <p className="mt-4 text-sm text-white/40 max-w-md mx-auto leading-relaxed">
           Two-week engagement. Fixed fee. We connect to all your systems, run continuously, and surface everything.
         </p>
-        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || totalSavings + 'K')}%20waste" className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
+        <a href="mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || formatDollarDisplay(totalSavings))}%20waste" className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
           Schedule a walkthrough
         </a>
       </div>
@@ -1131,15 +1353,6 @@ function DoneView({ findings, totalSavings, scanSource, agentLog, techStack, gap
 }
 
 /* ─── SHARED COMPONENTS ─── */
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="p-5 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
-      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#a8a29e" }}>{label}</p>
-      <p className="mt-2 font-fraunces text-2xl font-light" style={{ letterSpacing: "-0.03em", color: color || "#1a1a1a" }}>{value}</p>
-    </div>
-  );
-}
-
 function FindingsList({ findings }: { findings: Finding[] }) {
   const colors = {
     critical: { bg: "rgba(196,80,30,0.08)", text: "#c4501e" },

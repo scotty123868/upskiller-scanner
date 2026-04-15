@@ -1,12 +1,44 @@
 import Anthropic from "@anthropic-ai/sdk";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
+import { checkRateLimit, recordScanCost } from "@/lib/supabase";
 
 const anthropic = new Anthropic();
 
 export const maxDuration = 300; // 5 minutes for Opus deep analysis
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB max upload
+
 export async function POST(request: Request) {
+  // Auth check: require a valid session (scan_token from OAuth)
+  const cookieHeader = request.headers.get("cookie") || "";
+  const tokenMatch = cookieHeader.match(/scan_token=([^;]+)/);
+  const userIdMatch = cookieHeader.match(/user_id=([^;]+)/);
+  const scanToken = tokenMatch?.[1];
+  const userId = userIdMatch?.[1] || "";
+
+  if (!scanToken) {
+    return new Response("Authentication required. Please sign in first.", { status: 401 });
+  }
+
+  // Validate the token is a real Google OAuth token (prevents forged cookies)
+  try {
+    const tokenInfo = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${scanToken}`);
+    if (!tokenInfo.ok) {
+      return new Response("Session expired. Please sign in again.", { status: 401 });
+    }
+  } catch {
+    return new Response("Authentication validation failed.", { status: 401 });
+  }
+
+  // Rate limit check
+  if (userId) {
+    const rateLimit = await checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return new Response("Rate limit exceeded for this month.", { status: 429 });
+    }
+  }
+
   let formData;
   try {
     formData = await request.formData();
@@ -16,6 +48,11 @@ export async function POST(request: Request) {
   const file = formData.get("file") as File;
   if (!file || !file.name) {
     return new Response("No file uploaded", { status: 400 });
+  }
+
+  // File size guard
+  if (file.size > MAX_FILE_SIZE) {
+    return new Response(`File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`, { status: 413 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -229,9 +266,13 @@ Respond ONLY with the JSON object, no other text.`,
         send({ type: "agent-log", agent: "Dispatch", message: "Deep analysis complete. Streaming findings...", logType: "progress" });
 
         const content = message.content[0];
-        if (content.type === "text") {
+        if (!content || content.type !== "text") {
+          throw new Error("No text response from analysis");
+        }
+
+        {
           let text = content.text.trim();
-          if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+          text = text.replace(/^[\s]*```(?:json)?[\s]*/m, "").replace(/[\s]*```[\s]*$/m, "").trim();
 
           const parsed = JSON.parse(text);
           const findings = parsed.findings || parsed;
@@ -270,7 +311,16 @@ Respond ONLY with the JSON object, no other text.`,
       } catch (err) {
         console.error("Claude API error:", err);
         send({ type: "agent-log", agent: "Dispatch", message: `Analysis error: ${err instanceof Error ? err.message : "Unknown"}`, logType: "progress" });
-        send({ type: "finding", title: "Analysis error", description: "Unable to complete analysis. Please try again or contact us.", amount: null, severity: "medium", category: "Operations" });
+        send({ type: "error", message: `Analysis failed: ${err instanceof Error ? err.message : "Unknown error"}. Please try again.` });
+        send({ type: "progress", records: totalRecords, scanned: totalRecords, message: "Scan failed." });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+        return;
+      }
+
+      // Record scan cost (only on success)
+      if (userId) {
+        try { await recordScanCost(userId, 30); } catch { /* non-critical */ }
       }
 
       send({ type: "progress", records: totalRecords, scanned: totalRecords, message: "Scan complete." });

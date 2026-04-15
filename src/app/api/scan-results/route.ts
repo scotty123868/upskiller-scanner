@@ -5,11 +5,27 @@ export async function GET(request: Request) {
   const userIdMatch = cookieHeader.match(/user_id=([^;]+)/);
   const userId = userIdMatch?.[1];
 
-  if (!userId || !isConfigured) {
+  // Auth check: require both user_id AND a valid scan_token cookie
+  const tokenMatch = cookieHeader.match(/scan_token=([^;]+)/);
+  const scanToken = tokenMatch?.[1];
+
+  if (!userId || !isConfigured || !scanToken) {
     return Response.json({ scan: null }, { status: 200 });
   }
 
-  // Get latest completed scan with findings
+  // For read-only results, verify user exists in DB (fast).
+  // Token validation happens on write paths (scan, scan-google) to prevent expensive API abuse.
+  const { data: user } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .single();
+
+  if (!user) {
+    return Response.json({ scan: null }, { status: 200 });
+  }
+
+  // Get latest completed scan with findings (scoped to verified user)
   const { data: scan } = await supabaseAdmin
     .from("scans")
     .select("*")

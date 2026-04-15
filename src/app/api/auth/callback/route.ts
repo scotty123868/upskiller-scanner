@@ -5,11 +5,23 @@ import { getOrCreateUser } from "@/lib/supabase";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state") || "crawl";
+  const returnedState = url.searchParams.get("state") || "";
 
   if (!code) {
     return NextResponse.redirect(new URL("/?error=no_code", request.url));
   }
+
+  // CSRF protection: verify state parameter matches what we stored in cookie
+  const cookieHeader = request.headers.get("cookie") || "";
+  const storedStateMatch = cookieHeader.match(/oauth_state=([^;]+)/);
+  const storedState = storedStateMatch?.[1] || "";
+
+  if (!storedState || storedState !== returnedState) {
+    return NextResponse.redirect(new URL("/?error=csrf_failed", request.url));
+  }
+
+  // Extract mode from state (format: "csrftoken:mode")
+  const state = storedState.split(":")[1] || "crawl";
 
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -47,6 +59,8 @@ export async function GET(request: Request) {
     }
 
     const response = NextResponse.redirect(new URL(`/?scan=ready&mode=${state}`, request.url));
+    // Clear the CSRF state cookie
+    response.cookies.set("oauth_state", "", { httpOnly: true, secure: true, sameSite: "lax", maxAge: 0, path: "/" });
     response.cookies.set("scan_token", tokens.access_token || "", {
       httpOnly: true, secure: true, sameSite: "lax", maxAge: 3600, path: "/",
     });
@@ -56,11 +70,6 @@ export async function GET(request: Request) {
     if (userId) {
       response.cookies.set("user_id", userId, {
         httpOnly: true, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
-      });
-    }
-    if (email) {
-      response.cookies.set("user_email", email, {
-        httpOnly: false, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
       });
     }
     return response;
