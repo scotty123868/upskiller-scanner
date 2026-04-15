@@ -1260,7 +1260,7 @@ RULES:
               }
               await completeScan(scanId, {
                 summary,
-                techStack: techStack.slice(0, 50),
+                techStack: techStackForUI,
                 gaps,
                 renewals: renewalCalendar,
                 automations: automationOpps,

@@ -350,31 +350,54 @@ export default function Home() {
         if (data.scan) {
           const s = data.scan;
           setSummary(s.summary || {});
-          setTechStack(s.tech_stack || []);
+          // Tech stack from DB uses backend field names; map to frontend shape
+          if (s.tech_stack && Array.isArray(s.tech_stack)) {
+            setTechStack(s.tech_stack.map((t: Record<string, unknown>) => ({
+              name: t.name || "",
+              category: t.category || "",
+              estimatedCost: t.estimatedCost || (t.estimatedAnnualCost ? "~est." : "detected"),
+              emailActivity: t.emailActivity || t.emailCount || 0,
+              actualAmounts: t.actualAmounts || [],
+            })));
+          }
           setGaps(s.gaps || []);
           setRenewals(s.renewals || []);
           setAutomations(s.automations || []);
-          if (s.findings) {
-            setFindings(s.findings.map((f: Record<string, unknown>, i: number) => ({ ...f, id: i + 1 })));
+          if (s.findings && Array.isArray(s.findings)) {
+            // Map snake_case DB fields to camelCase frontend fields
+            setFindings(s.findings.map((f: Record<string, unknown>, i: number) => ({
+              id: i + 1,
+              title: f.title || "",
+              description: f.description || "",
+              amount: f.amount || null,
+              severity: f.severity || "medium",
+              category: f.category || "",
+              agent: f.agent,
+              department: f.department,
+              recommendation: f.recommendation,
+              evidence: f.evidence,
+              timeToValue: f.timeToValue || f.time_to_value || undefined,
+            })));
             const total = s.findings.reduce((sum: number, f: Record<string, unknown>) => {
               if (typeof f.amount !== "string") return sum;
               return sum + parseDollarToRaw(f.amount);
             }, 0);
             setTotalSavings(total);
           }
-          if (s.agentLogs) {
+          if (s.agentLogs && Array.isArray(s.agentLogs)) {
             setAgentLog(s.agentLogs.map((l: Record<string, unknown>) => ({
               id: Date.now() + Math.random(),
-              agent: l.agent,
-              message: l.message,
-              timestamp: new Date(l.created_at as string).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
-              type: l.log_type || "progress",
+              agent: String(l.agent || ""),
+              message: String(l.message || ""),
+              timestamp: l.created_at ? new Date(l.created_at as string).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "",
+              type: (l.log_type || "progress") as AgentLogEntry["type"],
             })));
           }
-          if (s.workflows && s.workflows.length > 0) {
+          if (s.workflows && Array.isArray(s.workflows) && s.workflows.length > 0) {
             setWorkflows(s.workflows);
           }
-          if (s.org_intelligence && Object.keys(s.org_intelligence).length > 0) {
+          // Validate orgIntelligence has required fields before casting
+          if (s.org_intelligence && typeof s.org_intelligence === "object" && typeof s.org_intelligence.emailsAnalyzed === "number") {
             setOrgIntel(s.org_intelligence as OrgIntelligence);
           }
           setScanSource(s.source || "google-personal");
@@ -925,9 +948,12 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
           <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>
             Your top actions
           </h3>
-          <div className="grid md:grid-cols-3 gap-3">
-            {/* Top spend/waste finding */}
-            {findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1).map((f) => (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Top spend/waste finding (prefer critical/high, fall back to any) */}
+            {(findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1).length > 0
+              ? findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1)
+              : findings.slice(0, 1)
+            ).map((f) => (
               <div key={f.id} className="p-4 rounded-xl" style={{ border: "2px solid #c4501e", background: "rgba(196,80,30,0.03)" }}>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#c4501e" }}>Fix first</p>
                 <h4 className="text-sm font-semibold mb-1">{f.title}</h4>
@@ -1269,15 +1295,15 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
         <div className="mt-8">
           <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>Renewal Calendar</h3>
           <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #ddd8d0" }}>
-            <div className="grid grid-cols-4 gap-0 px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ background: "#f0ede8", color: "#a8a29e" }}>
+            <div className="hidden md:grid grid-cols-4 gap-0 px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ background: "#f0ede8", color: "#a8a29e" }}>
               <span>Vendor</span><span>Renewal Date</span><span>Est. Cost</span><span>Action</span>
             </div>
             {renewals.map((r, i) => (
-              <div key={i} className="grid grid-cols-4 gap-0 px-5 py-3 items-center" style={{ borderTop: "1px solid #ddd8d0" }}>
-                <span className="text-sm font-medium">{r.vendor}</span>
-                <span className="text-sm tabular-nums" style={{ color: "#6b6560" }}>{r.renewalDate}</span>
-                <span className="text-sm font-medium tabular-nums">{r.estimatedCost}</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full inline-block w-fit" style={{
+              <div key={i} className="px-5 py-3 flex flex-wrap md:grid md:grid-cols-4 gap-1 md:gap-0 items-center" style={{ borderTop: "1px solid #ddd8d0" }}>
+                <span className="text-sm font-medium w-full md:w-auto">{r.vendor}</span>
+                <span className="text-xs md:text-sm tabular-nums" style={{ color: "#6b6560" }}>{r.renewalDate}</span>
+                <span className="text-xs md:text-sm font-medium tabular-nums ml-2 md:ml-0">{r.estimatedCost}</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full inline-block w-fit ml-auto md:ml-0" style={{
                   background: r.urgency === "urgent" ? "rgba(196,80,30,0.08)" : r.urgency === "upcoming" ? "rgba(245,158,11,0.08)" : "rgba(59,130,246,0.08)",
                   color: r.urgency === "urgent" ? "#c4501e" : r.urgency === "upcoming" ? "#f59e0b" : "#3b82f6"
                 }}>{r.action}</span>
