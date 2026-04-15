@@ -776,73 +776,29 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
   return (
     <div className="animate-fade-up">
       {/* ════════════════════════════════════════ */}
-      {/* THE CINEMATIC REVEAL                  */}
+      {/* THE REVEAL — credibility first           */}
       {/* ════════════════════════════════════════ */}
 
-      {/* Reveal line 1 — what we actually analyzed (real numbers) */}
       <div className="text-center pt-4 md:pt-8">
         <p className="text-xs md:text-sm animate-fade-in reveal-1" style={{ color: "#a8a29e" }}>
           We analyzed {orgIntel ? `${orgIntel.emailsAnalyzed.toLocaleString()} emails, ${orgIntel.calendarEvents} calendar events, and ${orgIntel.driveDocuments} documents` : "your recent email, calendar, and drive data"}.
         </p>
       </div>
 
-      {/* Reveal line 2 — the org fingerprint */}
-      <div className="text-center mt-6 md:mt-8">
-        <p className="text-sm md:text-base font-medium animate-fade-in reveal-2" style={{ color: "#6b6560" }}>
-          {orgIntel && orgIntel.orgSize > 1
-            ? <>Your <b className="text-[#1a1a1a]">{orgIntel.orgSize}-person team</b> uses <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> and spends <b className="text-[#1a1a1a]">{orgIntel.meetingHours6mo}h in meetings</b> every 6 months.</>
-            : <>We found <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> in your workflow{orgIntel ? ` and ${orgIntel.meetingHours6mo}h of meetings over 6 months` : ""}.</>
-          }
-        </p>
-      </div>
+      {/* ════════════════════════════════════════ */}
+      {/* THE HERO — org intelligence, not dollars */}
+      {/* This is the "how do they know this?"     */}
+      {/* moment. It's the thing they can verify.  */}
+      {/* ════════════════════════════════════════ */}
 
-      {/* Reveal line 3 — workflows (the magic line) */}
-      {(workflows.length > 0 || (orgIntel && orgIntel.recurringProcesses.length > 0)) && (
-        <div className="text-center mt-4 md:mt-6">
-          <p className="text-sm md:text-base font-medium animate-fade-in reveal-3" style={{ color: "#6b6560" }}>
-            We detected <b className="text-[#1a1a1a]">{summary.workflowsDiscovered || workflows.length} recurring processes</b> running on human effort.{" "}
-            <span style={{ color: "#10b981" }}><b>{summary.workflowsAutomatable || automatableWorkflows.length}</b> can be automated.</span>
-          </p>
-        </div>
-      )}
-
-      {/* THE BIG NUMBER — the gasp moment */}
-      <div className="text-center mt-8 md:mt-12 mb-4 md:mb-8">
-        <h2 className="font-fraunces text-5xl md:text-8xl font-light animate-count-up reveal-4" style={{ color: "#c4501e", letterSpacing: "-0.04em" }}>
-          <CountUpDollar value={summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`} />
+      <div className="mt-8 md:mt-10 mb-8 md:mb-10">
+        <h2 className="font-fraunces text-2xl md:text-4xl font-light text-center animate-fade-in reveal-2" style={{ letterSpacing: "-0.03em" }}>
+          Here&apos;s how your organization actually operates.
         </h2>
-        <p className="text-sm mt-2 md:mt-3 animate-fade-in reveal-5" style={{ color: "#6b6560" }}>
-          in addressable waste {summary.totalAutomatableHours ? `and ${summary.totalAutomatableHours} of automatable work` : ""} — from email alone
-        </p>
       </div>
 
-      {/* Coverage teaser */}
-      <div className="text-center mb-8 md:mb-10 animate-fade-in reveal-5">
-        <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full" style={{ background: "#f0ede8" }}>
-          <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "#ddd8d0" }}>
-            <div className="h-full rounded-full coverage-fill" style={{ width: `${summary.coverageScore || 35}%`, background: "linear-gradient(90deg, #c4501e, #f59e0b)" }} />
-          </div>
-          <span className="text-xs font-medium tabular-nums" style={{ color: "#6b6560" }}>
-            {summary.coverageScore || 35}% of the picture — <a href="#gaps" className="underline" style={{ color: "#c4501e" }}>unlock the rest</a>
-          </span>
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex items-center justify-center gap-3 mb-10">
-        <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
-        <a href="mailto:scotty@upskillerai.com?subject=Scanner%20found%20waste%20—%20want%20full%20engagement" className="text-xs font-semibold px-5 py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us about a full engagement</a>
-      </div>
-
-      {/* ════════════════════════════════════════ */}
-      {/* ORG INTELLIGENCE — the "how do they     */}
-      {/* know this?" section                     */}
-      {/* ════════════════════════════════════════ */}
-      {orgIntel && (orgIntel.recurringProcesses.length > 0 || orgIntel.topCommunicators.length > 0 || orgIntel.topVendorMeetings.length > 0) && (
-        <div className="mb-10 rounded-2xl overflow-hidden" style={{ background: "#1a1a1a" }}>
-          <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>What we learned about your organization</p>
-          </div>
+      {orgIntel && (
+        <div className="mb-10 rounded-2xl overflow-hidden animate-fade-in reveal-3" style={{ background: "#1a1a1a" }}>
 
           {/* Quick stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -965,14 +921,110 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
         </div>
       )}
 
+      {/* No orgIntel fallback — still show something useful */}
+      {!orgIntel && (
+        <div className="mb-10 p-6 rounded-2xl text-center" style={{ background: "#f0ede8" }}>
+          <p className="text-sm font-medium" style={{ color: "#6b6560" }}>
+            We found <b className="text-[#1a1a1a]">{summary.appsDiscovered || techStack.length} tools</b> in your email
+            {workflows.length > 0 && <> and <b className="text-[#1a1a1a]">{workflows.length} recurring processes</b></>}.
+          </p>
+        </div>
+      )}
+
       {/* ════════════════════════════════════════ */}
-      {/* THREE PILLARS — doors to explore        */}
+      {/* WORKFLOWS — the automatable stuff       */}
+      {/* This is shown inline, not behind a      */}
+      {/* click. If we found workflows, show them. */}
       {/* ════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-8">
+      {workflows.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="font-fraunces text-xl font-light" style={{ letterSpacing: "-0.02em" }}>
+              {automatableWorkflows.length > 0
+                ? <>{automatableWorkflows.length} workflows an AI agent could run for you</>
+                : <>{workflows.length} recurring processes we detected</>
+              }
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {workflows.slice(0, 5).map((w, i) => (
+              <div key={i} className="p-4 rounded-xl" style={{ border: "1px solid #ddd8d0" }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: w.automationScore >= 70 ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)", color: w.automationScore >= 70 ? "#10b981" : "#f59e0b" }}>
+                        {w.automationScore >= 70 ? "automatable" : "review"}
+                      </span>
+                      <span className="text-xs uppercase tracking-wider" style={{ color: "#a8a29e" }}>{w.frequency}</span>
+                    </div>
+                    <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
+                    <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{w.description}</p>
+                    {w.evidence && (
+                      <p className="mt-2 text-xs italic" style={{ color: "#a8a29e" }}>Evidence: {w.evidence}</p>
+                    )}
+                    {w.agentBlueprint && (
+                      <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)" }}>
+                        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>What an AI agent would do instead</p>
+                        <p className="text-xs mb-1" style={{ color: "#6b6560" }}>Trigger: {w.agentBlueprint.trigger}</p>
+                        <ol className="text-xs list-decimal pl-4 space-y-0.5" style={{ color: "#6b6560" }}>
+                          {w.agentBlueprint.steps.map((step: string, j: number) => <li key={j}>{step}</li>)}
+                        </ol>
+                        {w.agentBlueprint.humanInTheLoop && (
+                          <p className="text-xs mt-1" style={{ color: "#f59e0b" }}>Human stays in loop: {w.agentBlueprint.humanInTheLoop}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {w.estimatedTimeSavings && <p className="text-xs font-semibold" style={{ color: "#10b981" }}>{w.estimatedTimeSavings}</p>}
+                    <p className="text-xs" style={{ color: "#a8a29e" }}>saved</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {workflows.length > 5 && (
+              <button
+                onClick={() => setActiveSection(activeSection === "workflows" ? null : "workflows")}
+                className="w-full text-center text-xs font-medium py-3 rounded-xl transition-all hover:bg-[#f0ede8]"
+                style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}
+              >
+                {activeSection === "workflows" ? "Show less" : `Show all ${workflows.length} workflows`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Remaining workflows (if "show all" clicked) */}
+      {activeSection === "workflows" && workflows.length > 5 && (
+        <div className="mb-8 space-y-3">
+          {workflows.slice(5).map((w, i) => (
+            <div key={i + 5} className="p-4 rounded-xl" style={{ border: "1px solid #ddd8d0" }}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: w.automationScore >= 70 ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)", color: w.automationScore >= 70 ? "#10b981" : "#f59e0b" }}>
+                      {w.automationScore >= 70 ? "automatable" : "review"} — {w.frequency}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
+                  <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{w.description}</p>
+                </div>
+                {w.estimatedTimeSavings && <p className="text-xs font-semibold flex-shrink-0" style={{ color: "#10b981" }}>{w.estimatedTimeSavings}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════ */}
+      {/* SECONDARY: Findings + Tech Stack        */}
+      {/* Dollars only when backed by evidence    */}
+      {/* ════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mb-8">
         {([
-          { key: "spend" as const, icon: "💰", label: "SPEND", value: summary.totalAnnualSpend || "—", sub: `across ${summary.appsDiscovered || techStack.length} tools`, color: "#3b82f6" },
-          { key: "workflows" as const, icon: "⚡", label: "WORKFLOWS", value: String(summary.workflowsDiscovered || workflows.length || "—"), sub: `${summary.workflowsAutomatable || automatableWorkflows.length || 0} automatable`, color: "#10b981" },
-          { key: "waste" as const, icon: "🔍", label: "WASTE", value: summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`, sub: `${findings.length} findings`, color: "#c4501e" },
+          { key: "spend" as const, label: "TECH STACK", value: `${summary.appsDiscovered || techStack.length} tools`, sub: summary.totalAnnualSpend ? `${summary.totalAnnualSpend} estimated` : "detected from email", color: "#3b82f6" },
+          { key: "waste" as const, label: "FINDINGS", value: `${findings.length} issues`, sub: (criticalCount + highCount > 0) ? `${criticalCount} critical, ${highCount} high` : "from AI analysis", color: "#c4501e" },
         ]).map((pillar) => (
           <button
             key={pillar.key}
@@ -1019,49 +1071,6 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
       )}
 
       {/* WORKFLOWS section */}
-      {activeSection === "workflows" && workflows.length > 0 && (
-        <div className="mb-8 animate-fade-up rounded-xl overflow-hidden" style={{ border: "2px solid #10b981" }}>
-          <div className="px-5 py-3 flex items-center justify-between" style={{ background: "rgba(16,185,129,0.04)", borderBottom: "1px solid rgba(16,185,129,0.1)" }}>
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#10b981" }}>Discovered Workflows</span>
-            <button onClick={() => setActiveSection(null)} className="text-xs" style={{ color: "#a8a29e" }}>Close</button>
-          </div>
-          <div className="p-4 space-y-3">
-            {workflows.map((w, i) => (
-              <div key={i} className="p-4 rounded-lg" style={{ border: "1px solid #ddd8d0" }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded" style={{ background: w.automationScore >= 70 ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)", color: w.automationScore >= 70 ? "#10b981" : "#f59e0b" }}>
-                        {w.automationScore}% automatable
-                      </span>
-                      <span className="text-xs uppercase tracking-wider" style={{ color: "#a8a29e" }}>{w.frequency}</span>
-                    </div>
-                    <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
-                    <p className="text-sm leading-relaxed" style={{ color: "#6b6560" }}>{w.description}</p>
-                    {w.agentBlueprint && (
-                      <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.1)" }}>
-                        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>What an AI agent would do</p>
-                        <p className="text-xs mb-1" style={{ color: "#6b6560" }}>Trigger: {w.agentBlueprint.trigger}</p>
-                        <ol className="text-xs list-decimal pl-4 space-y-0.5" style={{ color: "#6b6560" }}>
-                          {w.agentBlueprint.steps.map((step, j) => <li key={j}>{step}</li>)}
-                        </ol>
-                        {w.agentBlueprint.humanInTheLoop && (
-                          <p className="text-xs mt-1" style={{ color: "#f59e0b" }}>Human stays in loop: {w.agentBlueprint.humanInTheLoop}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {w.estimatedAnnualSavings && <p className="font-fraunces text-lg font-light" style={{ color: "#10b981", letterSpacing: "-0.02em" }}>{w.estimatedAnnualSavings}</p>}
-                    <p className="text-xs" style={{ color: "#a8a29e" }}>{w.estimatedTimeSavings} saved</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* WASTE section */}
       {activeSection === "waste" && findings.length > 0 && (
         <div className="mb-8 animate-fade-up rounded-xl overflow-hidden" style={{ border: "2px solid #c4501e" }}>
@@ -1075,76 +1084,24 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
         </div>
       )}
 
-      {/* Mini Command Center */}
-      <div className="mt-8 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
-        <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Command Center</span>
-          {summary.coverageScore != null && (
-            <div className="flex items-center gap-3">
-              <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-                <div className="h-full rounded-full bg-[#4ade80] transition-all" style={{ width: `${summary.coverageScore}%` }} />
-              </div>
-              <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.3)" }}>{summary.coverageScore}% coverage</span>
-            </div>
-          )}
-        </div>
-        <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Annual Spend</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.totalAnnualSpend || "—"}</p>
-          </div>
-          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Waste Found</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`}</p>
-          </div>
-          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Apps</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.appsDiscovered || techStack.length}</p>
-          </div>
-          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Critical</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: criticalCount > 0 ? "#c4501e" : "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{criticalCount}</p>
-          </div>
-          <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>High</p>
-            <p className="mt-2 font-fraunces text-xl font-light" style={{ color: highCount > 0 ? "#f59e0b" : "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{highCount}</p>
+      {/* Tech stack strip (compact) */}
+      {techStack.length > 0 && (
+        <div className="mb-8 p-4 rounded-xl" style={{ border: "1px solid #ddd8d0" }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#a8a29e" }}>
+            Detected in your email ({techStack.length} tools)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {techStack.slice(0, 20).map((app) => (
+              <span key={app.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "#f0ede8", color: "#1a1a1a" }}>
+                {app.name}
+              </span>
+            ))}
+            {techStack.length > 20 && (
+              <span className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "#f0ede8", color: "#a8a29e" }}>+{techStack.length - 20} more</span>
+            )}
           </div>
         </div>
-
-        {/* Tech Stack Strip */}
-        {techStack.length > 0 && (
-          <div className="px-5 pb-4">
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
-              Discovered Tech Stack ({techStack.length} tools)
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {techStack.slice(0, 25).map((app) => (
-                <span key={app.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
-                  {app.name} <span style={{ color: "rgba(255,255,255,0.25)" }}>{app.estimatedCost}</span>
-                </span>
-              ))}
-              {techStack.length > 25 && (
-                <span className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.2)" }}>+{techStack.length - 25} more</span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Spend by Category */}
-        {summary.spendByCategory && Object.keys(summary.spendByCategory).length > 0 && (
-          <div className="px-5 pb-5">
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>Spend by Category</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.entries(summary.spendByCategory).slice(0, 8).map(([cat, amount]) => (
-                <div key={cat} className="flex items-baseline justify-between px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{cat}</span>
-                  <span className="text-xs font-medium tabular-nums" style={{ color: "rgba(255,255,255,0.6)" }}>{amount}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ════════════════════════════════════════ */}
       {/* THE HOOK — gap wizard as game levels    */}
@@ -1360,18 +1317,26 @@ function DoneView({ findings, totalSavings, agentLog, techStack, gaps, summary, 
 
       {/* CLOSING CTA */}
       <div className="mt-12 md:mt-16 p-6 md:p-10 rounded-2xl text-center" style={{ background: "#1a1a1a" }}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "rgba(255,255,255,0.3)" }}>Ready for the full picture?</p>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "rgba(255,255,255,0.3)" }}>This was from email alone</p>
         <h3 className="font-fraunces text-xl md:text-2xl font-light text-white/90 max-w-lg mx-auto" style={{ letterSpacing: "-0.02em" }}>
-          {summary.totalAnnualWaste || `$${formatDollarDisplay(totalSavings)}`} found from {summary.coverageScore || 35}% visibility.
+          {workflows.length > 0
+            ? <>{workflows.length} processes, {summary.appsDiscovered || techStack.length} tools, and {findings.length} findings from {summary.coverageScore || 35}% visibility.</>
+            : <>{summary.appsDiscovered || techStack.length} tools and {findings.length} findings from {summary.coverageScore || 35}% visibility.</>
+          }
           <br />
-          <span style={{ color: "#f59e0b" }}>What&apos;s hiding in the other {100 - (summary.coverageScore || 35)}%?</span>
+          <span style={{ color: "#f59e0b" }}>Imagine what we&apos;d find connected to everything.</span>
         </h3>
         <p className="mt-4 text-sm text-white/40 max-w-md mx-auto leading-relaxed">
-          Two-week engagement. Fixed fee. We connect to all your systems, run continuously, and surface everything.
+          Two-week engagement. Fixed fee. We connect to all your systems, run continuously, and map every workflow, every vendor relationship, every dollar.
         </p>
-        <a href={`mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent(summary.totalAnnualWaste || formatDollarDisplay(totalSavings))}%20waste`} className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
+        <a href={`mailto:scotty@upskillerai.com?subject=Full%20engagement%20—%20scanner%20found%20${encodeURIComponent((workflows.length || 0) + ' workflows and ' + (findings.length || 0) + ' findings')}`} className="mt-6 inline-flex text-sm font-semibold px-7 py-3 rounded-full bg-[#faf9f7] text-[#1a1a1a] hover:bg-[#eee] transition-all hover:-translate-y-0.5 hover:shadow-lg">
           Schedule a walkthrough
         </a>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center justify-center gap-3 mt-6">
+        <button onClick={onReset} className="text-xs font-medium px-4 py-2 rounded-full transition-all hover:bg-[#f0ede8]" style={{ border: "1px solid #ddd8d0", color: "#6b6560" }}>New scan</button>
       </div>
     </div>
   );
