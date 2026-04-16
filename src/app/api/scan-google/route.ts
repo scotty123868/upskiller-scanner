@@ -1096,10 +1096,12 @@ Focus on what the data actually shows. Ignore passes where you lack data.
 
 4. **RENEWAL DATES MENTIONED IN EMAILS** — Only include dates that are literally in the email body. If a renewal email says "renews on June 15, 2026", that's a finding. If no date is mentioned, don't guess.
 
-5. **DUPLICATE / COMPETING TOOLS** — Flag tools that serve the same purpose, even across different categories. Use your knowledge:
-   - Same category: Slack + Teams, Asana + Monday, Zoom + Google Meet
-   - Cross-category (same job): Harmonic AI + PitchBook (both investor/company intelligence), Clay + Apollo (both sales prospecting), HubSpot + Salesforce (both CRM even if our DB says one is "CMS"), Notion + Coda (both workspace/docs)
-   - Add a finding per overlap with: both tool names, what they both do, and recommendation to consolidate.
+5. **DUPLICATE / COMPETING TOOLS** — Flag tools that serve the same purpose, even across categories.
+   - **Evidence threshold (required):** BOTH tools must have ≥3 emails in the tech stack OR ≥1 invoice in the data below. Skip if one tool only shows 1-2 emails (likely trial/abandoned).
+   - Same category examples: Slack + Teams, Asana + Monday.com, Zoom + Google Meet
+   - Cross-category examples (same underlying job): Harmonic AI + PitchBook (investor/company intel), Clay + Apollo (sales prospecting), Notion + Coda (docs/workspace)
+   - **Do NOT override our category data** based on general knowledge alone. If the tech stack shows two tools with meaningful email activity that you believe compete, flag them. Otherwise skip.
+   - Each overlap finding: both tool names + their shared purpose + recommendation to consolidate.
 
 6. **OBSERVABLE RECURRING PROCESSES** — The cadence data pre-detected patterns. Turn each into a workflow entry with real evidence.
 

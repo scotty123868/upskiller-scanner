@@ -120,7 +120,8 @@ export default function Home() {
   const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
   const [scanProgress, setScanProgress] = useState({ records: 0, scanned: 0, message: "" });
   const [fileName, setFileName] = useState("");
-  const [totalSavings, setTotalSavings] = useState(0);
+  // Kept for compatibility with SSE handlers; not displayed anywhere in the UI now.
+  const [, setTotalSavings] = useState(0);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSource, setScanSource] = useState<"file" | "google-admin" | "google-personal">("file");
   const [techStack, setTechStack] = useState<TechStackApp[]>([]);
@@ -338,6 +339,12 @@ export default function Home() {
       const scanMode = params.get("mode") || "crawl";
       window.history.replaceState({}, "", "/");
 
+      // Fetch user info in parallel so the Nav shows signed-in state during scan
+      fetch("/api/scan-results")
+        .then((res) => res.json())
+        .then((data) => { if (data.user) setSignedInUser(data.user); })
+        .catch(() => {});
+
       // Microsoft OAuth completed but scanning not yet implemented
       if (scanMode === "microsoft") {
         setScanError("Microsoft scanning is coming soon. Your account was connected successfully. Please use Google sign-in for scanning in the meantime.");
@@ -450,11 +457,9 @@ export default function Home() {
           <ScanningView
             progress={scanProgress}
             findings={findings}
-            totalSavings={totalSavings}
             agentLog={agentLog}
             scanSource={scanSource}
             techStack={techStack}
-            summary={summary}
           />
         )}
         {mode === "done" && (
@@ -658,14 +663,12 @@ function UploadingState({ fileName }: { fileName: string }) {
 }
 
 /* ─── SCANNING VIEW ─── */
-function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, techStack, summary }: {
+function ScanningView({ progress, findings, agentLog, scanSource, techStack }: {
   progress: { records: number; scanned: number; message: string };
   findings: Finding[];
-  totalSavings: number;
   agentLog: AgentLogEntry[];
   scanSource: string;
   techStack: TechStackApp[];
-  summary: ScanSummary;
 }) {
   const sourceLabel = scanSource === "google-admin" ? "Google Workspace" : scanSource === "google-personal" ? "Gmail" : "uploaded file";
 
@@ -1330,7 +1333,7 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
                       {tools.sort((a, b) => b.emailActivity - a.emailActivity).map((app, idx) => {
                         const actualSpend = app.actualAmounts?.reduce((a, b) => a + b, 0) || 0;
                         const isVerified = app.costSource === "invoice" && actualSpend > 0;
-                        const initial = app.name.charAt(0).toUpperCase();
+                        const initial = app.name.charAt(0).toUpperCase() || "?";
                         return (
                           <div key={app.name} className="px-5 py-3.5 flex items-center gap-3 transition-colors hover:bg-[#faf9f7]" style={{ borderTop: idx > 0 ? "1px solid #f4f2ee" : "none" }}>
                             {/* Letter avatar with category color */}
