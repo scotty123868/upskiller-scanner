@@ -1031,15 +1031,36 @@ export async function POST(request: Request) {
       // ═══════════════════════════════════════
       send({ type: "agent-log", agent: "Atlas", message: "Running Opus deep analysis with structured intelligence...", logType: "analysis" });
 
-      const prompt = `You are UpSkiller AI's Atlas agent. You have completed a full agentic crawl of an organization's Google Workspace and built a structured intelligence model. Your job is to produce findings that are IMMEDIATELY useful to a small business owner.
+      const prompt = `You are UpSkiller AI's Atlas agent. You have completed a scan of a single user's Google Workspace inbox. Your job is to produce findings that are IMMEDIATELY useful and HONEST.
 
-## ORGANIZATION PROFILE
-- Domain: ${userDomain || "unknown"}
-- Estimated org size: ${orgUserCount} users
-- SaaS tools discovered: ${techStack.length}
-- Estimated annual SaaS spend: ${formatCost(totalEstimatedSpendMid)}
-- Items crawled: ${totalItems} (emails, files, events)
-- Data sources: Gmail (metadata + financial bodies), Drive (metadata + sharing), Calendar (events + attendees)${isAdmin ? ", Admin Directory" : ""}
+## CRITICAL CONTEXT: WHAT YOU DO AND DO NOT KNOW
+
+**You scanned ONE inbox** (the signed-in user's own email). You do NOT have:
+- Actual SaaS subscription costs (unless shown in invoice emails below)
+- The organization's real budget or revenue
+- Visibility into other employees' inboxes
+- Actual seat counts for any tool
+- Contract terms, expiration dates (unless explicitly in email body)
+- Vendor usage data (logins, active users)
+
+**What you DO know** comes only from: this one inbox's email headers, financial email bodies, calendar events visible to this user, and Drive metadata.
+
+${isAdmin ? "" : `**THIS IS A PERSONAL/SINGLE-USER SCAN.** Statements like "X handles 94% of communications" are meaningless because we only see their inbox. Do NOT make claims about organizational communication patterns, key person risk, or workflow bottlenecks based on this single-inbox data. Those require admin-level access to multiple inboxes.`}
+
+## RULES (VIOLATE = BAD FINDING)
+
+1. **No invented numbers.** If an invoice shows $22,000, that's real. If you say "annual SaaS budget is $7K", that's invented — we don't know their budget.
+2. **No percentage claims about "all communication" or "the org".** We only see one inbox.
+3. **Don't propose automating things that aren't automatable.** Negotiations, strategic decisions, relationship management: NOT automatable. Data entry, recurring reports, notifications, receipt processing: automatable.
+4. **Evidence must be citable.** If you can't point to a specific email subject, sender, date, or amount from the data below, don't claim it.
+5. **Silent on unknowns.** If you can't tell license waste without usage data, say so and recommend connecting a specific system to find out.
+
+## ORGANIZATION PROFILE (from scan)
+- User domain: ${userDomain || "personal gmail"}
+- Est. internal addresses in this inbox: ${orgUserCount}
+- SaaS tools detected by email domain: ${techStack.length}
+- Items analyzed: ${totalItems} (emails, files, events from ONE inbox)
+- Scan mode: ${isAdmin ? "ADMIN (multi-inbox)" : "PERSONAL (single inbox)"}
 
 ## DISCOVERED TECH STACK WITH PRICING
 ${techStackSummary}
@@ -1063,59 +1084,63 @@ ${adminUsers.length > 0 ? `## ADMIN DIRECTORY\n${JSON.stringify(adminUsers, null
 
 ## ANALYSIS INSTRUCTIONS
 
-You have structured intelligence from multiple data sources. Use ALL of it. Run these analysis passes:
+Focus on what the data actually shows. Ignore passes where you lack data.
 
-### SPEND INTELLIGENCE (passes 1-7)
-1. LICENSE WASTE: For per-seat tools, compare email activity to org size. Low email count relative to org = possible inactive seats.
-2. DUPLICATE TOOLS: Find tools in the same category (e.g., two project management tools). Recommend consolidation.
-3. TIER OPTIMIZATION: If invoice amounts seem high relative to org size, flag potential for downgrade.
-4. VENDOR CONSOLIDATION: Multiple tools from same category that one vendor could replace.
-5. RENEWAL INTELLIGENCE: Emails mentioning renewals, expirations, auto-renewal. Build renewal calendar.
-6. ACTUAL vs ESTIMATED: Compare invoice amounts to estimated pricing. Flag discrepancies.
-7. SPEND BY CATEGORY: Break down annual spend by category.
+### DEFENSIBLE FINDINGS (do these when real evidence exists)
 
-### WORKFLOW DISCOVERY (passes 8-13) — THIS IS CRITICAL
-Use the pre-detected cadence patterns, communication graph, attachment data, and calendar intelligence.
+1. **REAL INVOICE AMOUNTS** — The financial emails below may contain actual invoice amounts. Extract them. "Harmonic AI charged $22,000 on Apr 5, 2026" is defensible. "This exceeds their budget" is NOT (you don't know their budget).
 
-8. RECURRING REPORTS/PROCESSES: The cadence data shows emails sent on regular schedules. For each meaningful cadence: who sends it, what it is, how often, who receives it, and what it reveals about a manual process. BE SPECIFIC with real email addresses and subjects from the data.
+2. **RECURRING BILLING PATTERNS** — If you see the same vendor sending invoices monthly/quarterly, that's a subscription. Call it out with the actual amounts.
 
-9. HUMAN MIDDLEWARE: The forward ratio data identifies people who mostly relay information. These roles can be partially automated. Name the specific people and their patterns.
+3. **TOOL DETECTION FROM EMAIL SENDERS** — The tech stack list below shows tools detected by sender domain. That's real.
 
-10. MANUAL DATA EXCHANGE: Shared spreadsheets in Drive + attachment-heavy email threads = people manually moving data between systems. Cross-reference Drive shared spreadsheets with email attachment patterns.
+4. **RENEWAL DATES MENTIONED IN EMAILS** — Only include dates that are literally in the email body. If a renewal email says "renews on June 15, 2026", that's a finding. If no date is mentioned, don't guess.
 
-11. MEETING-DRIVEN WORKFLOWS: Calendar recurring meetings with specific external domains often indicate vendor check-ins, status updates, or review cycles that follow a pattern. Cross-reference calendar vendor domains with email cadences.
+5. **DUPLICATE TOOL CATEGORIES** — If you see Slack AND Microsoft Teams both in the tech stack, that's a duplicate flag. Recommend picking one.
 
-12. CROSS-SYSTEM PROCESSES: Financial emails mentioning multiple tools ("update the spreadsheet", "check QuickBooks", "log in Salesforce") reveal manual multi-system workflows.
+6. **OBSERVABLE RECURRING PROCESSES** — The cadence data pre-detected patterns. Turn each into a workflow entry with real evidence.
 
-13. AUTOMATION SCOPING: For each discovered workflow, design an AI agent blueprint:
-- Trigger (incoming email, calendar event, time-based, data change)
-- Steps the agent would perform
-- Systems it would integrate
-- Where a human stays in the loop
-- Time savings per instance and annually
-- Implementation complexity
+7. **AUTOMATABLE EMAIL WORKFLOWS** — Things like:
+   - Receipt/invoice processing into expense tools (automatable)
+   - Renewal notifications → calendar entries (automatable)
+   - Report emails being compiled manually (automatable)
+   - Data extraction from standardized emails (automatable)
 
-### RISK & KNOWLEDGE (passes 14-16)
-14. KEY PERSON RISK: From communication graph, identify people who are sole contacts for vendor relationships or bridge between groups.
-15. SHADOW IT: Apps sending billing emails that appear to be individual purchases.
-16. INFORMATION BOTTLENECKS: From the communication graph, identify people through whom most information flows. If they're out sick, what breaks?
+### NOT AUTOMATABLE (don't suggest these)
+- Negotiations of any kind
+- Vendor relationship management
+- Strategic decisions
+- Approval of >$X dollars
+- Anything requiring human judgment on trust, fit, or strategy
+
+### DO NOT DO THESE PASSES (not enough data from single inbox)
+- ❌ License waste estimates (no actual usage data)
+- ❌ Tier optimization recommendations (no tier data)
+- ❌ "X handles Y% of communications" (only see one inbox)
+- ❌ Key person risk for the organization (only one inbox)
+- ❌ Information bottleneck identification (only one inbox)
+- ❌ Comparing invoice to "budget" (no budget data)
+- ❌ Inventing dollar savings numbers
+
+### WHAT TO DO INSTEAD OF THE ABOVE
+
+For things you can't determine, turn them into gaps: "We detected you use Salesforce. To tell you if you're overpaying on seats, we'd need to connect Salesforce admin API to see active users vs licensed users."
 
 ## OUTPUT FORMAT
 
 {
   "summary": {
-    "totalAnnualSpend": "${formatCost(totalEstimatedSpendMid)}",
-    "totalAnnualWaste": "$X.XK or $X.XM",
-    "totalAutomatableHours": "XX hours/month",
+    "totalAnnualSpend": "sum of REAL invoice amounts from financial emails, or null if none found",
+    "totalAnnualWaste": "null unless you have real evidence of specific waste — NOT a generic estimate",
+    "totalAutomatableHours": "XX hours/month (from workflows with automationScore >= 70)",
     "findingsCount": N,
     "criticalCount": N,
     "appsDiscovered": ${techStack.length},
     "workflowsDiscovered": N,
     "workflowsAutomatable": N,
     "systemsCrawled": ["Gmail", "Drive", "Calendar"${isAdmin ? ', "Admin Directory"' : ""}],
-    "coverageScore": N,
-    "topRiskArea": "one sentence",
-    "spendByCategory": { "category": "$XXK", ... }
+    "coverageScore": 25-40 (this is a single-inbox scan, coverage is inherently limited),
+    "topRiskArea": "one sentence about the strongest evidence-backed finding"
   },
   "workflows": [
     {
@@ -1178,13 +1203,14 @@ Use the pre-detected cadence patterns, communication graph, attachment data, and
 }
 
 RULES:
-- Quality over quantity. Find 8-12 findings and 3-8 workflows. Only include findings backed by real evidence from the data.
-- Do NOT pad with generic advice. Every finding must reference specific apps, people, amounts, or patterns from this org's data.
-- Every workflow MUST cite specific evidence (email addresses, subjects, cadence patterns, calendar events).
-- If the cadence data shows recurring patterns, those ARE workflows. Turn each one into a workflow entry.
-- Gaps must be PERSONALIZED to apps found in their email.
-- If the data is thin (few emails, solo user), produce fewer but higher-quality findings. 3-5 strong findings beats 15 weak ones.
-- Respond ONLY with the JSON.`;
+- **Quality over quantity.** 3-8 findings with real evidence beats 15 made-up ones.
+- **No findings based on data you don't have.** If you need org budget, tier info, or usage stats to make a claim, turn it into a GAP instead ("Connect Salesforce to see which users are inactive").
+- **Dollar amounts MUST come from the actual financial emails below.** Do not invent budgets, "savings", or spend estimates. If the data doesn't support a number, leave amount as null.
+- **Every workflow MUST cite specific evidence** (real sender, real subject, real dates from the data).
+- **If the data is thin, produce fewer findings.** Don't pad.
+- **Automation score should reflect reality.** Negotiations, relationship management, strategic decisions = low score (under 30). Data entry, notifications, categorization = high score (70+).
+- **For gaps: list concrete systems to connect** that would unlock specific findings. Be specific: "Connect QuickBooks to see actual SaaS expenses" not "provide financial data".
+- **Respond ONLY with the JSON.**`;
 
       try {
         let message;
