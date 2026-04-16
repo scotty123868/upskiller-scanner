@@ -5,11 +5,9 @@ export async function GET(request: Request) {
   const userIdMatch = cookieHeader.match(/user_id=([^;]+)/);
   const userId = userIdMatch?.[1];
 
-  // Auth check: require both user_id AND a valid scan_token cookie
-  const tokenMatch = cookieHeader.match(/scan_token=([^;]+)/);
-  const scanToken = tokenMatch?.[1];
-
-  if (!userId || !isConfigured || !scanToken) {
+  // For read-only results, only require user_id.
+  // scan_token is only needed for write paths (triggering new scans).
+  if (!userId || !isConfigured) {
     return Response.json({ scan: null }, { status: 200 });
   }
 

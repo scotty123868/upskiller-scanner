@@ -110,6 +110,7 @@ type OrgIntelligence = {
   attachmentThreads: number;
   gmailLabels: string[];
   roleInboxes: string[];
+  topExternalSenders?: { email: string; domain: string; count: number }[];
 };
 
 export default function Home() {
@@ -786,22 +787,29 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
       {orgIntel && (
         <div className="mb-10 rounded-2xl overflow-hidden animate-fade-in reveal-3" style={{ background: "#1a1a1a" }}>
 
-          {/* Quick stats row — only show stats with real data */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "rgba(255,255,255,0.06)" }}>
-            {[
+          {/* Quick stats row — only show stats with real data, grid adapts to count */}
+          {(() => {
+            const stats = [
               { label: "People", value: orgIntel.orgSize, sub: orgIntel.orgDomain || "detected", show: orgIntel.orgSize > 0 },
               { label: "External partners", value: orgIntel.externalDomains, sub: orgIntel.externalMeetings > 0 ? `${orgIntel.externalMeetings} meetings` : "from email domains", show: orgIntel.externalDomains > 0 },
               { label: "Recurring processes", value: orgIntel.recurringProcesses.length, sub: "detected from email", show: orgIntel.recurringProcesses.length > 0 },
               { label: "Meeting load", value: `${Math.round(orgIntel.meetingHours6mo / 26)}h/wk`, sub: `${orgIntel.recurringMeetings} recurring`, show: orgIntel.meetingHours6mo > 0 },
-              { label: "Email threads", value: orgIntel.emailsAnalyzed, sub: `${orgIntel.deepThreads} deep threads`, show: orgIntel.recurringProcesses.length === 0 && orgIntel.meetingHours6mo === 0 && orgIntel.emailsAnalyzed > 0 },
-            ].filter((s) => s.show).slice(0, 4).map((stat) => (
-              <div key={stat.label} className="p-4" style={{ background: "#1a1a1a" }}>
-                <p className="text-xs uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>{stat.label}</p>
-                <p className="mt-1 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{stat.value}</p>
-                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.2)" }}>{stat.sub}</p>
+              { label: "Email activity", value: orgIntel.emailsAnalyzed, sub: `${orgIntel.deepThreads} deep threads, ${orgIntel.attachmentThreads} with attachments`, show: orgIntel.recurringProcesses.length === 0 && orgIntel.meetingHours6mo === 0 && orgIntel.emailsAnalyzed > 0 },
+              { label: "Tools in use", value: summary.appsDiscovered || techStack.length, sub: "detected from email senders", show: (summary.appsDiscovered || techStack.length) > 0 },
+            ].filter((s) => s.show).slice(0, 4);
+            const cols = stats.length === 1 ? "grid-cols-1" : stats.length === 2 ? "grid-cols-2" : stats.length === 3 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 md:grid-cols-4";
+            return (
+              <div className={`grid ${cols} gap-px`} style={{ background: "rgba(255,255,255,0.06)" }}>
+                {stats.map((stat) => (
+                  <div key={stat.label} className="p-4" style={{ background: "#1a1a1a" }}>
+                    <p className="text-xs uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>{stat.label}</p>
+                    <p className="mt-1 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{stat.value}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.2)" }}>{stat.sub}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* Recurring processes — the magic */}
           {orgIntel.recurringProcesses.length > 0 && (
@@ -825,6 +833,26 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
             </div>
           )}
 
+          {/* Top external senders — who's filling your inbox */}
+          {orgIntel.topExternalSenders && orgIntel.topExternalSenders.length > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#3b82f6" }}>
+                Who&apos;s filling your inbox
+              </p>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                External senders by volume. These represent your vendor relationships and information subscriptions.
+              </p>
+              <div className="space-y-1.5">
+                {orgIntel.topExternalSenders.slice(0, 6).map((s) => (
+                  <div key={s.email} className="flex items-center justify-between py-1">
+                    <span className="text-xs truncate flex-1" style={{ color: "rgba(255,255,255,0.6)" }}>{s.domain}</span>
+                    <span className="text-xs tabular-nums flex-shrink-0 ml-3" style={{ color: "rgba(255,255,255,0.3)" }}>{s.count} emails</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Vendor relationships from calendar */}
           {orgIntel.topVendorMeetings.length > 0 && (
             <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -842,21 +870,28 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
           )}
 
           {/* Key people + risk signals */}
-          {(orgIntel.topCommunicators.length > 0 || orgIntel.humanMiddleware.length > 0) && (
-            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="grid md:grid-cols-2 gap-4">
-                {orgIntel.topCommunicators.length > 0 && (() => {
-                  const totalEmails = orgIntel.topCommunicators.reduce((s, c) => s + c.total, 0);
-                  const topPerson = orgIntel.topCommunicators[0];
-                  const topPct = totalEmails > 0 ? Math.round((topPerson.total / totalEmails) * 100) : 0;
-                  return (
+          {/* Only show communicators when it's meaningful (admin scan with real distribution,
+              not a personal inbox where of course YOU dominate) */}
+          {(() => {
+            const totalEmails = orgIntel.topCommunicators.reduce((s, c) => s + c.total, 0);
+            const topPct = totalEmails > 0 && orgIntel.topCommunicators.length > 0
+              ? Math.round((orgIntel.topCommunicators[0].total / totalEmails) * 100)
+              : 0;
+            // Skip communicator bottleneck if it's >80% (personal inbox) or no middleware data
+            const hasMeaningfulComms = orgIntel.topCommunicators.length >= 3 && topPct < 80;
+            const hasMiddleware = orgIntel.humanMiddleware.length > 0;
+            if (!hasMeaningfulComms && !hasMiddleware) return null;
+            return (
+              <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {hasMeaningfulComms && (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: topPct > 60 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>
                         {topPct > 60 ? "Communication bottleneck" : "Communication distribution"}
                       </p>
                       {topPct > 60 && (
                         <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>
-                          {topPerson.email.split("@")[0]} handles {topPct}% of all email. If they&apos;re unavailable, communication stalls.
+                          {orgIntel.topCommunicators[0].email.split("@")[0]} handles {topPct}% of all email.
                         </p>
                       )}
                       {orgIntel.topCommunicators.slice(0, 4).map((c) => {
@@ -869,23 +904,23 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
                         );
                       })}
                     </div>
-                  );
-                })()}
-                {orgIntel.humanMiddleware.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Information routers</p>
-                    <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>People who mostly forward rather than originate email. These roles may be partially automatable.</p>
-                    {orgIntel.humanMiddleware.map((h) => (
-                      <div key={h.email} className="flex items-center justify-between py-1.5">
-                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{h.email.split("@")[0]}</span>
-                        <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: "#f59e0b" }}>{h.forwardRatio}% forwarded</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  )}
+                  {hasMiddleware && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Information routers</p>
+                      <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>People who mostly forward rather than originate email. These roles may be partially automatable.</p>
+                      {orgIntel.humanMiddleware.map((h) => (
+                        <div key={h.email} className="flex items-center justify-between py-1.5">
+                          <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{h.email.split("@")[0]}</span>
+                          <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: "#f59e0b" }}>{h.forwardRatio}% forwarded</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Video tools + shared spreadsheets */}
           <div className="px-5 py-4 flex flex-wrap gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -941,37 +976,42 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
           <h3 className="font-fraunces text-xl font-light mb-4" style={{ letterSpacing: "-0.02em" }}>
             Your top actions
           </h3>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* Top spend/waste finding (prefer critical/high, fall back to any) */}
-            {(findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1).length > 0
-              ? findings.filter((f) => f.severity === "critical" || f.severity === "high").slice(0, 1)
-              : findings.slice(0, 1)
-            ).map((f) => (
-              <div key={f.id} className="p-4 rounded-xl" style={{ border: "2px solid #c4501e", background: "rgba(196,80,30,0.03)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#c4501e" }}>Fix first</p>
-                <h4 className="text-sm font-semibold mb-1">{f.title}</h4>
-                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{f.description?.slice(0, 120)}{(f.description?.length || 0) > 120 ? "..." : ""}</p>
-                {f.amount && <p className="mt-2 text-sm font-semibold" style={{ color: "#c4501e" }}>{f.amount}</p>}
+          {(() => {
+            // Pick 3 distinct findings/workflows, no duplicates
+            const usedIds = new Set<number | string>();
+            const fixFirst = findings.filter((f) => f.severity === "critical" || f.severity === "high")[0] || findings[0];
+            if (fixFirst) usedIds.add(fixFirst.id);
+            const automate = automatableWorkflows[0];
+            const watchOut = findings.filter((f) => !usedIds.has(f.id) && (f.category === "Risk" || f.category === "Knowledge" || f.category === "Operations"))[0]
+              || findings.filter((f) => !usedIds.has(f.id))[0];
+            return (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {fixFirst && (
+                  <div className="p-4 rounded-xl" style={{ border: "2px solid #c4501e", background: "rgba(196,80,30,0.03)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#c4501e" }}>Fix first</p>
+                    <h4 className="text-sm font-semibold mb-1">{fixFirst.title}</h4>
+                    <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{fixFirst.description?.slice(0, 120)}{(fixFirst.description?.length || 0) > 120 ? "..." : ""}</p>
+                    {fixFirst.amount && <p className="mt-2 text-sm font-semibold" style={{ color: "#c4501e" }}>{fixFirst.amount}</p>}
+                  </div>
+                )}
+                {automate && (
+                  <div className="p-4 rounded-xl" style={{ border: "2px solid #10b981", background: "rgba(16,185,129,0.03)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>Automate this</p>
+                    <h4 className="text-sm font-semibold mb-1">{automate.name}</h4>
+                    <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{automate.description?.slice(0, 120)}{(automate.description?.length || 0) > 120 ? "..." : ""}</p>
+                    {automate.estimatedTimeSavings && <p className="mt-2 text-sm font-semibold" style={{ color: "#10b981" }}>{automate.estimatedTimeSavings} saved</p>}
+                  </div>
+                )}
+                {watchOut && (
+                  <div className="p-4 rounded-xl" style={{ border: "2px solid #f59e0b", background: "rgba(245,158,11,0.03)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Watch out</p>
+                    <h4 className="text-sm font-semibold mb-1">{watchOut.title}</h4>
+                    <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{watchOut.description?.slice(0, 120)}{(watchOut.description?.length || 0) > 120 ? "..." : ""}</p>
+                  </div>
+                )}
               </div>
-            ))}
-            {/* Top automatable workflow */}
-            {automatableWorkflows.slice(0, 1).map((w, i) => (
-              <div key={i} className="p-4 rounded-xl" style={{ border: "2px solid #10b981", background: "rgba(16,185,129,0.03)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#10b981" }}>Automate this</p>
-                <h4 className="text-sm font-semibold mb-1">{w.name}</h4>
-                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{w.description?.slice(0, 120)}{(w.description?.length || 0) > 120 ? "..." : ""}</p>
-                {w.estimatedTimeSavings && <p className="mt-2 text-sm font-semibold" style={{ color: "#10b981" }}>{w.estimatedTimeSavings} saved</p>}
-              </div>
-            ))}
-            {/* Key risk / operational insight */}
-            {findings.filter((f) => f.category === "Risk" || f.category === "Knowledge" || f.category === "Operations").slice(0, 1).map((f) => (
-              <div key={f.id} className="p-4 rounded-xl" style={{ border: "2px solid #f59e0b", background: "rgba(245,158,11,0.03)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Watch out</p>
-                <h4 className="text-sm font-semibold mb-1">{f.title}</h4>
-                <p className="text-xs leading-relaxed" style={{ color: "#6b6560" }}>{f.description?.slice(0, 120)}{(f.description?.length || 0) > 120 ? "..." : ""}</p>
-              </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
       )}
 

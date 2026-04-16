@@ -883,6 +883,18 @@ export async function POST(request: Request) {
         total: n.sent + n.received,
       }));
 
+      // Top external senders (vendors, partners, services)
+      // More useful for personal scans where "top communicator" is always you
+      const externalNodes = [...commNodes.values()]
+        .filter((n) => !n.isInternal && n.sent > 0)
+        .sort((a, b) => b.sent - a.sent)
+        .slice(0, 8);
+      const topExternalSenders = externalNodes.map((n) => ({
+        email: n.email,
+        domain: n.domain,
+        count: n.sent,
+      }));
+
       // Top recurring cadences for display
       const topCadences = cadencePatterns.slice(0, 8).map((p) => ({
         sender: p.sender,
@@ -915,6 +927,7 @@ export async function POST(request: Request) {
         attachmentThreads: heavyAttachmentThreads,
         gmailLabels: gmailLabels.slice(0, 20),
         roleInboxes: [...roleInboxes].slice(0, 10),
+        topExternalSenders,
       };
       send({ type: "orgIntelligence", ...orgIntelData });
 

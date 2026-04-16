@@ -68,8 +68,9 @@ export async function GET(request: Request) {
       httpOnly: true, secure: true, sameSite: "lax", maxAge: 3600, path: "/",
     });
     if (userId) {
+      // 30 day session so users stay logged in across visits
       response.cookies.set("user_id", userId, {
-        httpOnly: true, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
+        httpOnly: true, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
       });
     }
     return response;

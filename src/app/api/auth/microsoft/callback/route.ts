@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     });
     if (userId) {
       response.cookies.set("user_id", userId, {
-        httpOnly: true, secure: true, sameSite: "lax", maxAge: 86400, path: "/",
+        httpOnly: true, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
       });
     }
     return response;
