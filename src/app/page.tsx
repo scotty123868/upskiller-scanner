@@ -128,6 +128,8 @@ type OrgIntelligence = {
   backToBackMeetings?: number;
   heaviestMeetingDay?: { day: string; hours: number };
   topStandingMeetings?: { title: string; occurrences: number; totalMinutes: number; attendeeAvg: number }[];
+  awaitingResponse?: { subject: string; from: string; daysSince: number; isCustomerLead: boolean }[];
+  droppedThreads?: { subject: string; from: string; daysSince: number }[];
 };
 
 export default function Home() {
@@ -148,7 +150,20 @@ export default function Home() {
   const [workflows, setWorkflows] = useState<{ name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[]>([]);
   const [activeSection, setActiveSection] = useState<"spend" | "workflows" | "waste" | null>(null);
   const [orgIntel, setOrgIntel] = useState<OrgIntelligence | null>(null);
-  const [signedInUser, setSignedInUser] = useState<{ email: string; name: string; avatarUrl: string } | null>(null);
+  const [signedInUser, setSignedInUser] = useState<{ email: string; name: string; avatarUrl: string } | null>(() => {
+    // Read session from ally_user cookie synchronously on first render.
+    // This prevents the "flash of signed out" when reloading and avoids
+    // dependency on /api/scan-results returning user info.
+    if (typeof document === "undefined") return null;
+    const match = document.cookie.match(/(?:^|;\s*)ally_user=([^;]+)/);
+    if (!match) return null;
+    try {
+      const payload = atob(decodeURIComponent(match[1]));
+      const user = JSON.parse(payload);
+      if (user && typeof user.email === "string") return user;
+    } catch { /* malformed cookie, fall through */ }
+    return null;
+  });
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -869,6 +884,64 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
               </div>
             );
           })()}
+
+          {/* Awaiting your response — immediately actionable */}
+          {(orgIntel.awaitingResponse?.length || 0) > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex items-baseline justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#ef4444" }}>
+                  Awaiting your response
+                </p>
+                <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+                  {orgIntel.awaitingResponse?.length} thread{orgIntel.awaitingResponse?.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                Unanswered emails 3+ days old. Business-looking threads marked in red.
+              </p>
+              <div className="space-y-1.5">
+                {orgIntel.awaitingResponse?.slice(0, 6).map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 py-1.5 px-3 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                    {t.isCustomerLead && (
+                      <span className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0" style={{ background: "#ef4444" }} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{t.subject}</p>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.3)" }}>{t.from}</p>
+                    </div>
+                    <span className="text-xs tabular-nums flex-shrink-0" style={{ color: t.daysSince >= 7 ? "#f59e0b" : "rgba(255,255,255,0.4)" }}>
+                      {t.daysSince}d
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dropped threads — conversations that died after the other side replied */}
+          {(orgIntel.droppedThreads?.length || 0) > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#a78bfa" }}>
+                Conversations you may have dropped
+              </p>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                You engaged earlier, then the other person&apos;s last message sat for 14+ days without a reply.
+              </p>
+              <div className="space-y-1.5">
+                {orgIntel.droppedThreads?.slice(0, 4).map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 py-1.5 px-3 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{t.subject}</p>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.3)" }}>{t.from}</p>
+                    </div>
+                    <span className="text-xs tabular-nums flex-shrink-0" style={{ color: "rgba(167,139,250,0.7)" }}>
+                      {t.daysSince}d ago
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Recurring processes — the magic */}
           {orgIntel.recurringProcesses.length > 0 && (

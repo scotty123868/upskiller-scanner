@@ -949,6 +949,110 @@ export async function POST(request: Request) {
       const slowReplies = replyLatenciesMinutes.filter((m) => m > 60 * 24).length;
 
       // ═══════════════════════════════════════
+      // AWAITING-RESPONSE & DROPPED-THREAD DETECTION
+      // Immediately actionable: what emails are you sitting on?
+      // ═══════════════════════════════════════
+      const NOW = Date.now();
+      type ThreadStatus = {
+        threadId: string;
+        subject: string;
+        otherParty: string;
+        lastInboundDate: Date;
+        daysSinceInbound: number;
+        messageCount: number;
+        isCustomerLead: boolean;
+      };
+      const awaitingResponse: ThreadStatus[] = [];
+      const droppedThreads: ThreadStatus[] = [];
+
+      // Common automated/newsletter domains to exclude from "awaiting response"
+      const automatedDomains = /^(noreply|no-reply|notifications|mailer|bounce|donotreply|updates|news|newsletter|alert|digest|hello|team|info|support|help|marketing|promo)@/i;
+
+      for (const [threadId, timeline] of threadTimelines) {
+        if (timeline.length < 1) continue;
+        timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+        const lastMsg = timeline[timeline.length - 1];
+        // Find the thread metadata (any email in this thread)
+        const threadEmails = allEmailMeta.filter((e) => e.threadId === threadId);
+        if (threadEmails.length === 0) continue;
+        threadEmails.sort((a, b) => {
+          const da = new Date(a.date).getTime();
+          const db = new Date(b.date).getTime();
+          return da - db;
+        });
+        const lastEmail = threadEmails[threadEmails.length - 1];
+        const lastDate = new Date(lastEmail.date);
+        if (isNaN(lastDate.getTime())) continue;
+
+        const daysSince = (NOW - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince > 60) continue; // Older than 60 days — less actionable
+
+        // Determine if the other party is automated
+        const senderLocal = lastEmail.from.split("@")[0] || "";
+        const isAutomated = automatedDomains.test(lastEmail.from);
+        if (isAutomated) continue; // Don't flag newsletters as awaiting response
+
+        // "Other party" is the external person in the thread
+        const externalAddrs = threadEmails
+          .map((e) => e.from)
+          .filter((a) => a && !a.endsWith(`@${userDomain || "___NONE___"}`));
+        const otherParty = externalAddrs[externalAddrs.length - 1] || lastEmail.from;
+
+        // Heuristic: customer/lead = non-automated, non-subscription, from external domain
+        // Not a hard classifier, just a hint for sorting priority
+        const lastSubjectLower = (lastEmail.subject || "").toLowerCase();
+        const looksLikePromo = /sale|promo|subscription|unsubscribe|weekly digest|newsletter/.test(lastSubjectLower);
+        const looksLikeBusiness = /proposal|quote|intro|demo|follow[- ]?up|meeting|call|interested|question|pricing|contract/.test(lastSubjectLower);
+        const isCustomerLead = looksLikeBusiness && !looksLikePromo && !senderLocal.match(/^(noreply|no-reply)/);
+
+        const isLastFromUser = userDomain ? lastEmail.from.endsWith(`@${userDomain}`) : false;
+
+        // AWAITING RESPONSE: last message is INBOUND, >3 days old, not yet replied to
+        if (!isLastFromUser && daysSince > 3 && daysSince < 30 && !looksLikePromo) {
+          awaitingResponse.push({
+            threadId,
+            subject: lastEmail.subject || "(no subject)",
+            otherParty,
+            lastInboundDate: lastDate,
+            daysSinceInbound: Math.round(daysSince),
+            messageCount: threadEmails.length,
+            isCustomerLead,
+          });
+        }
+
+        // DROPPED THREADS: user previously engaged, then stopped. Last message from other party, 14+ days ago.
+        if (!isLastFromUser && daysSince >= 14 && daysSince < 45 && threadEmails.length >= 2) {
+          // Check if user had replied earlier in the thread
+          const userReplied = threadEmails.some((e) => userDomain && e.from.endsWith(`@${userDomain}`));
+          if (userReplied && !looksLikePromo) {
+            droppedThreads.push({
+              threadId,
+              subject: lastEmail.subject || "(no subject)",
+              otherParty,
+              lastInboundDate: lastDate,
+              daysSinceInbound: Math.round(daysSince),
+              messageCount: threadEmails.length,
+              isCustomerLead,
+            });
+          }
+        }
+
+        // Use lastMsg for any future timeline-level logic (referenced to keep the var live)
+        void lastMsg;
+      }
+
+      // Sort awaiting by priority: customer/lead first, then by days waiting (newest 3-7d first as actionable, oldest deprioritized)
+      awaitingResponse.sort((a, b) => {
+        if (a.isCustomerLead !== b.isCustomerLead) return a.isCustomerLead ? -1 : 1;
+        return a.daysSinceInbound - b.daysSinceInbound;
+      });
+      // Dropped threads: sort by days since (oldest first = most "dropped")
+      droppedThreads.sort((a, b) => b.daysSinceInbound - a.daysSinceInbound);
+
+      const topAwaiting = awaitingResponse.slice(0, 8);
+      const topDropped = droppedThreads.slice(0, 5);
+
+      // ═══════════════════════════════════════
       // ATTACHMENT FILENAME PATTERNS
       // (We have hasAttachment bit but Gmail metadata doesn't give filenames without full reads.
       // Use subject patterns as proxy for repeated document flows.)
@@ -1005,9 +1109,11 @@ export async function POST(request: Request) {
         for (const r of [...email.to, ...email.cc]) group.recipients.add(r);
       }
 
-      // Detect recurring patterns (3+ occurrences with regular intervals)
+      // Detect recurring patterns with STRICT thresholds.
+      // A cadence must satisfy: minimum count, minimum span, AND interval regularity.
+      // This kills false positives like "3 emails in 3 days = daily" (really a burst).
       for (const [key, group] of senderSubjectGroups) {
-        if (group.dates.length < 3) continue;
+        if (group.dates.length < 4) continue; // Min 4 occurrences for ANY cadence
 
         group.dates.sort((a, b) => a.getTime() - b.getTime());
         const intervals = [];
@@ -1017,33 +1123,43 @@ export async function POST(request: Request) {
 
         const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         const stdDev = Math.sqrt(intervals.reduce((sum, i) => sum + (i - avgInterval) ** 2, 0) / intervals.length);
+        const spanDays = (group.dates[group.dates.length - 1].getTime() - group.dates[0].getTime()) / (1000 * 60 * 60 * 24);
+        const count = group.dates.length;
 
-        // Only flag as cadence if intervals are somewhat regular (stdDev < 50% of avg)
-        if (avgInterval > 0 && stdDev < avgInterval * 0.6) {
-          let frequency = "ad-hoc";
-          if (avgInterval <= 1.5) frequency = "daily";
-          else if (avgInterval <= 4) frequency = "every few days";
-          else if (avgInterval <= 9) frequency = "weekly";
-          else if (avgInterval <= 18) frequency = "biweekly";
-          else if (avgInterval <= 45) frequency = "monthly";
-          else if (avgInterval <= 100) frequency = "quarterly";
+        // Require regular intervals (stdDev under 60% of avg)
+        if (avgInterval <= 0 || stdDev > avgInterval * 0.6) continue;
 
-          // Determine most common day of week
-          const dayCounts = [0, 0, 0, 0, 0, 0, 0];
-          for (const d of group.dates) dayCounts[d.getDay()]++;
-          const peakDay = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dayCounts.indexOf(Math.max(...dayCounts))];
-
-          const sender = key.split("::")[0];
-          cadencePatterns.push({
-            sender,
-            subjectPattern: normalizeSubject(group.subjects[0]),
-            frequency,
-            dayOfWeek: peakDay,
-            recipientCount: group.recipients.size,
-            exampleSubjects: group.subjects.slice(0, 3),
-            count: group.dates.length,
-          });
+        // Classify by frequency — requires BOTH count and span to match the claim.
+        // Example: "daily" needs 20+ occurrences over 30+ days, not 4 clustered emails.
+        let frequency: string | null = null;
+        if (count >= 20 && spanDays >= 30 && avgInterval >= 0.8 && avgInterval <= 2.5) {
+          frequency = "daily";
+        } else if (count >= 8 && spanDays >= 42 && avgInterval >= 5 && avgInterval <= 10) {
+          frequency = "weekly";
+        } else if (count >= 5 && spanDays >= 60 && avgInterval >= 11 && avgInterval <= 20) {
+          frequency = "biweekly";
+        } else if (count >= 4 && spanDays >= 90 && avgInterval >= 22 && avgInterval <= 40) {
+          frequency = "monthly";
+        } else if (count >= 4 && spanDays >= 120 && avgInterval >= 55 && avgInterval <= 100) {
+          frequency = "quarterly";
         }
+        if (!frequency) continue; // Not a reliable cadence — skip
+
+        // Determine most common day of week
+        const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+        for (const d of group.dates) dayCounts[d.getDay()]++;
+        const peakDay = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dayCounts.indexOf(Math.max(...dayCounts))];
+
+        const sender = key.split("::")[0];
+        cadencePatterns.push({
+          sender,
+          subjectPattern: normalizeSubject(group.subjects[0]),
+          frequency,
+          dayOfWeek: peakDay,
+          recipientCount: group.recipients.size,
+          exampleSubjects: group.subjects.slice(0, 3),
+          count: group.dates.length,
+        });
       }
 
       cadencePatterns.sort((a, b) => b.count - a.count);
@@ -1203,6 +1319,17 @@ export async function POST(request: Request) {
         backToBackMeetings: calBackToBack,
         heaviestMeetingDay: calHeaviestMeetingDay,
         topStandingMeetings: calTopRecurring,
+        awaitingResponse: topAwaiting.map((t) => ({
+          subject: t.subject.slice(0, 80),
+          from: t.otherParty,
+          daysSince: t.daysSinceInbound,
+          isCustomerLead: t.isCustomerLead,
+        })),
+        droppedThreads: topDropped.map((t) => ({
+          subject: t.subject.slice(0, 80),
+          from: t.otherParty,
+          daysSince: t.daysSinceInbound,
+        })),
       };
       send({ type: "orgIntelligence", ...orgIntelData });
 

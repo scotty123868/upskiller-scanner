@@ -73,6 +73,15 @@ export async function GET(request: Request) {
         httpOnly: true, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
       });
     }
+    // Client-readable session cookie. Independent of Supabase so session
+    // persistence works even if DB is misconfigured or slow.
+    // Base64-encoded JSON of user info; NOT a security boundary, just UI state.
+    if (email) {
+      const userPayload = Buffer.from(JSON.stringify({ email, name, avatarUrl })).toString("base64");
+      response.cookies.set("ally_user", userPayload, {
+        httpOnly: false, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
+      });
+    }
     return response;
   } catch (err) {
     console.error("OAuth callback error:", err);

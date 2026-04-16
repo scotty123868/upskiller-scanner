@@ -76,6 +76,18 @@ export async function GET(request: Request) {
         httpOnly: true, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
       });
     }
+    // Client-readable session cookie — independent of Supabase
+    const msEmail = msUser.mail || msUser.userPrincipalName || "";
+    if (msEmail) {
+      const userPayload = Buffer.from(JSON.stringify({
+        email: msEmail,
+        name: msUser.displayName || "",
+        avatarUrl: "",
+      })).toString("base64");
+      response.cookies.set("ally_user", userPayload, {
+        httpOnly: false, secure: true, sameSite: "lax", maxAge: 30 * 24 * 60 * 60, path: "/",
+      });
+    }
     return response;
   } catch (err) {
     console.error("Microsoft OAuth error:", err);
