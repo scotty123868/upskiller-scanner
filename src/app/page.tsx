@@ -120,6 +120,14 @@ type OrgIntelligence = {
   slowReplies?: number;
   totalUserSends?: number;
   docPatterns?: { name: string; count: number }[];
+  meetingHoursPerWeek?: number;
+  focusTimePerWeekday?: number;
+  meetingsAccepted?: number;
+  meetingsDeclined?: number;
+  meetingsTentative?: number;
+  backToBackMeetings?: number;
+  heaviestMeetingDay?: { day: string; hours: number };
+  topStandingMeetings?: { title: string; occurrences: number; totalMinutes: number; attendeeAvg: number }[];
 };
 
 export default function Home() {
@@ -1035,6 +1043,93 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Meeting insights — neutral observations, user draws conclusions */}
+          {((orgIntel.meetingHoursPerWeek || 0) > 0 || (orgIntel.topStandingMeetings?.length || 0) > 0) && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#06b6d4" }}>
+                Your calendar, in numbers
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                {(orgIntel.meetingHoursPerWeek || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: (orgIntel.meetingHoursPerWeek || 0) > 20 ? "#f59e0b" : "rgba(255,255,255,0.85)" }}>
+                      {orgIntel.meetingHoursPerWeek}h
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>meetings / week</p>
+                  </div>
+                )}
+                {(orgIntel.focusTimePerWeekday || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: (orgIntel.focusTimePerWeekday || 0) < 2 ? "#f59e0b" : "rgba(255,255,255,0.85)" }}>
+                      {orgIntel.focusTimePerWeekday}h
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>focus time / day</p>
+                  </div>
+                )}
+                {(orgIntel.backToBackMeetings || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {orgIntel.backToBackMeetings}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>back-to-back meetings</p>
+                  </div>
+                )}
+                {(orgIntel.meetingsDeclined || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {orgIntel.meetingsDeclined}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>meetings declined</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Top standing meetings by total time consumed */}
+              {(orgIntel.topStandingMeetings?.length || 0) > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    Where your meeting time goes
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                    Standing meetings ranked by total hours consumed over 6 months. Each one is worth asking: is this still worth the time?
+                  </p>
+                  <div className="space-y-1.5">
+                    {orgIntel.topStandingMeetings?.slice(0, 6).map((m, i) => {
+                      const hours = Math.round(m.totalMinutes / 60 * 10) / 10;
+                      return (
+                        <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{m.title}</p>
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                              {m.occurrences}× · avg {m.attendeeAvg} attendees
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-3">
+                            <p className="text-xs font-semibold tabular-nums" style={{ color: hours >= 10 ? "#f59e0b" : "rgba(255,255,255,0.5)" }}>
+                              {hours}h
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Soft callouts when extreme */}
+              {(orgIntel.meetingHoursPerWeek || 0) > 20 && (
+                <p className="text-xs mt-3 italic" style={{ color: "rgba(245,158,11,0.7)" }}>
+                  {orgIntel.meetingHoursPerWeek}h/week in meetings is half your work time. Worth auditing which recurring ones still need to exist.
+                </p>
+              )}
+              {(orgIntel.focusTimePerWeekday || 0) < 2 && (orgIntel.meetingHoursPerWeek || 0) > 10 && (
+                <p className="text-xs mt-3 italic" style={{ color: "rgba(245,158,11,0.7)" }}>
+                  Only {orgIntel.focusTimePerWeekday}h of uninterrupted focus time per day. Deep work is being squeezed.
+                </p>
+              )}
             </div>
           )}
 

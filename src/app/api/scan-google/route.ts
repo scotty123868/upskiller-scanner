@@ -64,6 +64,8 @@ type CalendarEvent = {
   isRecurring: boolean;
   conferenceType: string | null;
   organizer: string;
+  myResponseStatus: "accepted" | "declined" | "tentative" | "needsAction" | "unknown";
+  recurringEventId: string | null;
 };
 
 type DriveFile = {
@@ -172,6 +174,13 @@ export async function POST(request: Request) {
       let userDomain = ""; // The org's email domain
       let calMeetingTypes: Record<string, number> = {};
       let calBackToBack = 0;
+      let calDeclined = 0;
+      let calAccepted = 0;
+      let calTentative = 0;
+      let calTopRecurring: { title: string; occurrences: number; totalMinutes: number; attendeeAvg: number }[] = [];
+      let calFocusTimeHours = 0;
+      let calMeetingHoursPerWeek = 0;
+      let calHeaviestMeetingDay: { day: string; hours: number } = { day: "", hours: 0 };
 
       // Detect the user's org domain from their email
       try {
@@ -199,10 +208,11 @@ export async function POST(request: Request) {
       try {
         const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-        // Paginate Gmail list API to get up to ~2000 emails (was capped at 500)
+        // Paginate Gmail list API to get up to ~5000 emails. Batched parallel reads
+        // mean this completes in ~25-30 seconds even at the upper end.
         const messageIds: { id?: string | null }[] = [];
         let pageToken: string | undefined = undefined;
-        const MAX_EMAILS = 2000;
+        const MAX_EMAILS = 5000;
         while (messageIds.length < MAX_EMAILS) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const listRes: any = await gmail.users.messages.list({
@@ -218,8 +228,8 @@ export async function POST(request: Request) {
         send({ type: "agent-log", agent: "Scout", message: `Found ${messageIds.length} emails in last 6 months. Extracting metadata in parallel...`, logType: "discovery" });
 
         const senderDomains = new Map<string, number>();
-        // Process up to 1500 for metadata (parallel batches are fast)
-        const batch = messageIds.slice(0, 1500);
+        // Process up to 3000 for metadata (parallel batches are fast)
+        const batch = messageIds.slice(0, 3000);
 
         // Parse email addresses from header
         const extractEmails = (header: string): string[] => {
@@ -596,6 +606,18 @@ export async function POST(request: Request) {
           // Detect recurring (approximation: check if same title repeats)
           const isRecurring = !!e.recurringEventId;
 
+          // Extract my response status from attendees
+          let myResponseStatus: CalendarEvent["myResponseStatus"] = "unknown";
+          for (const a of e.attendees || []) {
+            if (a.self) {
+              const rs = a.responseStatus || "unknown";
+              if (rs === "accepted" || rs === "declined" || rs === "tentative" || rs === "needsAction") {
+                myResponseStatus = rs;
+              }
+              break;
+            }
+          }
+
           allCalendarEvents.push({
             summary: e.summary || "(no title)",
             date: e.start?.dateTime || e.start?.date || "",
@@ -605,6 +627,8 @@ export async function POST(request: Request) {
             isRecurring,
             conferenceType,
             organizer: e.organizer?.email || "",
+            myResponseStatus,
+            recurringEventId: e.recurringEventId || null,
           });
         }
 
@@ -654,6 +678,93 @@ export async function POST(request: Request) {
 
         calMeetingTypes = meetingTypes;
         calBackToBack = backToBack;
+
+        // Response status counts
+        for (const e of allCalendarEvents) {
+          if (e.myResponseStatus === "declined") calDeclined++;
+          else if (e.myResponseStatus === "accepted") calAccepted++;
+          else if (e.myResponseStatus === "tentative") calTentative++;
+        }
+
+        // Meeting hours per week (avg over 26 weeks)
+        const totalMeetingMinutes = allCalendarEvents.reduce((s, e) => s + e.duration, 0);
+        calMeetingHoursPerWeek = Math.round((totalMeetingMinutes / 60) / 26 * 10) / 10;
+
+        // Top recurring meetings by total time consumed
+        // Group by recurringEventId, compute aggregate stats
+        const recurringGroups = new Map<string, { title: string; occurrences: number; totalMinutes: number; totalAttendees: number }>();
+        for (const e of allCalendarEvents) {
+          if (!e.recurringEventId) continue;
+          if (!recurringGroups.has(e.recurringEventId)) {
+            recurringGroups.set(e.recurringEventId, { title: e.summary, occurrences: 0, totalMinutes: 0, totalAttendees: 0 });
+          }
+          const g = recurringGroups.get(e.recurringEventId)!;
+          g.occurrences++;
+          g.totalMinutes += e.duration;
+          g.totalAttendees += e.attendeeCount;
+        }
+        calTopRecurring = [...recurringGroups.values()]
+          .filter((g) => g.occurrences >= 3 && g.totalMinutes >= 60)
+          .sort((a, b) => b.totalMinutes - a.totalMinutes)
+          .slice(0, 8)
+          .map((g) => ({
+            title: g.title,
+            occurrences: g.occurrences,
+            totalMinutes: g.totalMinutes,
+            attendeeAvg: Math.round(g.totalAttendees / g.occurrences),
+          }));
+
+        // Focus time: count gaps >= 2 hours between meetings during weekday workday (9-5)
+        // as available deep work time
+        const eventsByDay = new Map<string, Array<{ start: Date; end: Date }>>();
+        for (const e of sortedEvents) {
+          const dayKey = e.start.toDateString();
+          if (!eventsByDay.has(dayKey)) eventsByDay.set(dayKey, []);
+          eventsByDay.get(dayKey)!.push({ start: e.start, end: e.end });
+        }
+        let totalFocusMinutes = 0;
+        let weekdayCount = 0;
+        const dayHours = new Map<string, number>();
+        for (const [dayKey, dayEvents] of eventsByDay) {
+          const d = new Date(dayKey);
+          if (d.getDay() === 0 || d.getDay() === 6) continue; // skip weekends
+          weekdayCount++;
+          // Workday window 9am-5pm = 480 min
+          const workdayStart = new Date(d);
+          workdayStart.setHours(9, 0, 0, 0);
+          const workdayEnd = new Date(d);
+          workdayEnd.setHours(17, 0, 0, 0);
+          // Sum meeting time within workday window
+          let meetingMinsToday = 0;
+          for (const evt of dayEvents) {
+            const overlapStart = new Date(Math.max(evt.start.getTime(), workdayStart.getTime()));
+            const overlapEnd = new Date(Math.min(evt.end.getTime(), workdayEnd.getTime()));
+            if (overlapEnd.getTime() > overlapStart.getTime()) {
+              meetingMinsToday += (overlapEnd.getTime() - overlapStart.getTime()) / 60000;
+            }
+          }
+          const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+          dayHours.set(dayName, (dayHours.get(dayName) || 0) + meetingMinsToday / 60);
+          // Available focus = 480 min workday - meeting minutes
+          const focusMins = Math.max(0, 480 - meetingMinsToday);
+          totalFocusMinutes += focusMins;
+        }
+        calFocusTimeHours = weekdayCount > 0 ? Math.round(totalFocusMinutes / 60 / weekdayCount * 10) / 10 : 0;
+
+        // Heaviest meeting day (averaged)
+        if (dayHours.size > 0) {
+          // Count weekdays of each name to compute avg
+          const dayCount = new Map<string, number>();
+          for (const dayKey of eventsByDay.keys()) {
+            const dn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date(dayKey).getDay()];
+            dayCount.set(dn, (dayCount.get(dn) || 0) + 1);
+          }
+          const avgDayHours = [...dayHours.entries()].map(([day, hrs]) => ({
+            day,
+            hours: Math.round((hrs / (dayCount.get(day) || 1)) * 10) / 10,
+          })).sort((a, b) => b.hours - a.hours);
+          if (avgDayHours.length > 0) calHeaviestMeetingDay = avgDayHours[0];
+        }
 
       } catch (err) {
         send({ type: "agent-log", agent: "Signal", message: `Calendar: ${err instanceof Error ? err.message.slice(0, 60) : "denied"}`, logType: "progress" });
@@ -1084,6 +1195,14 @@ export async function POST(request: Request) {
         slowReplies,
         totalUserSends,
         docPatterns: topDocPatterns.map(([name, count]) => ({ name, count })),
+        meetingHoursPerWeek: calMeetingHoursPerWeek,
+        focusTimePerWeekday: calFocusTimeHours,
+        meetingsAccepted: calAccepted,
+        meetingsDeclined: calDeclined,
+        meetingsTentative: calTentative,
+        backToBackMeetings: calBackToBack,
+        heaviestMeetingDay: calHeaviestMeetingDay,
+        topStandingMeetings: calTopRecurring,
       };
       send({ type: "orgIntelligence", ...orgIntelData });
 
@@ -1165,6 +1284,13 @@ export async function POST(request: Request) {
           `Events with external attendees: ${withExternal.length}`,
           `Video tools: ${[...confTools.entries()].map(([t, c]) => `${t}(${c})`).join(", ") || "none"}`,
           `Back-to-back meetings (no buffer): ${calBackToBack}`,
+          `Meeting hours per week: ${calMeetingHoursPerWeek}h`,
+          `Avg focus time per weekday: ${calFocusTimeHours}h (out of 8)`,
+          `Meetings declined: ${calDeclined}`,
+          `Meetings accepted: ${calAccepted}`,
+          `Heaviest meeting day: ${calHeaviestMeetingDay.day || "n/a"} (${calHeaviestMeetingDay.hours}h avg)`,
+          `\nTop standing meetings by total time consumed (over 6 months):`,
+          ...calTopRecurring.slice(0, 8).map((m) => `  - "${m.title}" — ${m.occurrences}× · ${Math.round(m.totalMinutes / 60 * 10) / 10}h total · avg ${m.attendeeAvg} attendees`),
           `\nMeeting type breakdown:`,
           ...Object.entries(calMeetingTypes).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([t, c]) => `  - ${t}: ${c}`),
           `\nTop external domains in calendar (vendor relationships):`,
@@ -1338,6 +1464,15 @@ Focus on what the data actually shows. Ignore passes where you lack data.
    - If median reply < 15 min: Interrupt-driven. Likely fighting fires instead of proactive work.
    - If median reply > 24 hr: Bottleneck on user. Consider email triage automation or delegation.
    - If one meeting type dominates (e.g., 30+ 1:1s): That's a lot of overhead. Recommend batching or async.
+
+8b. **MEETING TIME ANALYSIS** — Use calendar data neutrally. Report observations, not judgments:
+   - If meetingHoursPerWeek > 20: That's half the work week. Flag as "meeting audit" opportunity but don't say meetings are "bad" — say "worth asking which standing meetings still earn their time."
+   - Look at the "Top standing meetings by total time" list. The biggest time consumers are prime candidates for questions: could this be async? shorter? less frequent? fewer attendees?
+   - If focusTimePerWeekday < 2h: Deep work is being squeezed. Recommend "meeting-free mornings" or similar pattern.
+   - If meetingsDeclined > accepted/2: User is already declining a lot. Don't recommend more meeting reduction — they're doing it.
+   - Meetings with 8+ attendees running 60+ min recurring = strong candidate for async update.
+   - Meetings with 2 attendees running 30+ min recurring (1:1s) are usually justified — don't flag these unless there are 20+ of them.
+   - Frame recommendations as questions, not commands. "Is the 26h spent in weekly standup still earning its time?" not "Cancel the weekly standup."
 
 9. **DRIVE INTELLIGENCE INSIGHTS** — Use Drive file data:
    - Shared spreadsheets with many permissions = potential "spreadsheet-as-database" (candidate for real tool)
