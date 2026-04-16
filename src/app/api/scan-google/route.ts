@@ -181,6 +181,8 @@ export async function POST(request: Request) {
       let calFocusTimeHours = 0;
       let calMeetingHoursPerWeek = 0;
       let calHeaviestMeetingDay: { day: string; hours: number } = { day: "", hours: 0 };
+      let calendarAccessError = false;
+      let driveAccessError = false;
 
       // Detect the user's org domain from their email
       try {
@@ -228,8 +230,9 @@ export async function POST(request: Request) {
         send({ type: "agent-log", agent: "Scout", message: `Found ${messageIds.length} emails in last 6 months. Extracting metadata in parallel...`, logType: "discovery" });
 
         const senderDomains = new Map<string, number>();
-        // Process up to 3000 for metadata (parallel batches are fast)
-        const batch = messageIds.slice(0, 3000);
+        // Process up to 5000 for metadata. Parallel batches of 20 at ~100ms each
+        // means 5000 emails completes in ~25 seconds — well under Vercel's 300s budget.
+        const batch = messageIds.slice(0, 5000);
 
         // Parse email addresses from header
         const extractEmails = (header: string): string[] => {
@@ -493,7 +496,14 @@ export async function POST(request: Request) {
         send({ type: "agent-log", agent: "Quartermaster", message: `${allDriveFiles.length} documents found. ${sharedSpreadsheets.length} shared spreadsheets (potential manual data processes).`, logType: "discovery" });
 
       } catch (err) {
-        send({ type: "agent-log", agent: "Quartermaster", message: `Drive scan: ${err instanceof Error ? err.message.slice(0, 60) : "denied"}`, logType: "progress" });
+        const errMsg = err instanceof Error ? err.message : "unknown";
+        const isAuthError = errMsg.includes("403") || errMsg.includes("401") || errMsg.includes("insufficient");
+        driveAccessError = true;
+        if (isAuthError) {
+          send({ type: "agent-log", agent: "Quartermaster", message: "Drive access not granted. Sign out and re-authenticate to scan Drive.", logType: "progress" });
+        } else {
+          send({ type: "agent-log", agent: "Quartermaster", message: `Drive error: ${errMsg.slice(0, 80)}`, logType: "progress" });
+        }
       }
 
       // ═══════════════════════════════════════
@@ -767,7 +777,14 @@ export async function POST(request: Request) {
         }
 
       } catch (err) {
-        send({ type: "agent-log", agent: "Signal", message: `Calendar: ${err instanceof Error ? err.message.slice(0, 60) : "denied"}`, logType: "progress" });
+        const errMsg = err instanceof Error ? err.message : "unknown";
+        const isAuthError = errMsg.includes("403") || errMsg.includes("401") || errMsg.includes("insufficient");
+        calendarAccessError = true;
+        if (isAuthError) {
+          send({ type: "agent-log", agent: "Signal", message: "Calendar access not granted. Sign out and re-authenticate to scan calendar.", logType: "progress" });
+        } else {
+          send({ type: "agent-log", agent: "Signal", message: `Calendar error: ${errMsg.slice(0, 80)}`, logType: "progress" });
+        }
       }
 
       send({ type: "progress", records: 100, scanned: 50, message: `Crawl complete. ${totalItems} items. Building intelligence model...` });
@@ -1053,6 +1070,87 @@ export async function POST(request: Request) {
       const topDropped = droppedThreads.slice(0, 5);
 
       // ═══════════════════════════════════════
+      // THREADS WHERE I'M WAITING ON THEM
+      // I sent something, they haven't replied — potential follow-up
+      // ═══════════════════════════════════════
+      type WaitingOn = { subject: string; recipient: string; daysSince: number };
+      const waitingOnThem: WaitingOn[] = [];
+      for (const [threadId, timeline] of threadTimelines) {
+        timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+        const lastMsg = timeline[timeline.length - 1];
+        if (!lastMsg.isFromUser) continue; // Other party replied already
+        // Find the thread emails
+        const threadEmails = allEmailMeta.filter((e) => e.threadId === threadId);
+        if (threadEmails.length === 0) continue;
+        threadEmails.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const lastEmail = threadEmails[threadEmails.length - 1];
+        const lastDate = new Date(lastEmail.date);
+        if (isNaN(lastDate.getTime())) continue;
+        const daysSince = (NOW - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+        // Looking for: user's last message is 4-30 days old AND recipients are external
+        if (daysSince < 4 || daysSince > 30) continue;
+        const subject = (lastEmail.subject || "").toLowerCase();
+        const looksLikePromo = /sale|promo|subscription|unsubscribe|digest|newsletter/.test(subject);
+        if (looksLikePromo) continue;
+        // Find external recipient (the person we're waiting on)
+        const externalRecipient = lastEmail.to.find((a) => a && userDomain && !a.endsWith(`@${userDomain}`));
+        if (!externalRecipient) continue; // Only track outbound to external
+        // Only if this was a substantive reply-worthy message (longer threads more meaningful)
+        if (threadEmails.length < 2 && !subject.match(/\?|proposal|quote|intro|follow|meeting|call|interested|pricing/)) continue;
+        waitingOnThem.push({
+          subject: lastEmail.subject || "(no subject)",
+          recipient: externalRecipient,
+          daysSince: Math.round(daysSince),
+        });
+      }
+      waitingOnThem.sort((a, b) => b.daysSince - a.daysSince);
+      const topWaitingOnThem = waitingOnThem.slice(0, 6);
+
+      // ═══════════════════════════════════════
+      // NEW CONTACTS (first-time senders in last 30 days)
+      // ═══════════════════════════════════════
+      // Group emails by sender, sort by first date. If first date within 30 days,
+      // it's a "new contact" — never communicated before in the 6-month window
+      const senderFirstDate = new Map<string, Date>();
+      const senderLastDate = new Map<string, Date>();
+      const senderCount = new Map<string, number>();
+      for (const email of allEmailMeta) {
+        if (!email.from) continue;
+        if (userDomain && email.from.endsWith(`@${userDomain}`)) continue; // Only external
+        const senderLocal = email.from.split("@")[0] || "";
+        if (automatedDomains.test(email.from) || /^(noreply|no-reply|notifications|mailer)/.test(senderLocal)) continue;
+        const d = new Date(email.date);
+        if (isNaN(d.getTime())) continue;
+        const cur = senderFirstDate.get(email.from);
+        if (!cur || d < cur) senderFirstDate.set(email.from, d);
+        const curLast = senderLastDate.get(email.from);
+        if (!curLast || d > curLast) senderLastDate.set(email.from, d);
+        senderCount.set(email.from, (senderCount.get(email.from) || 0) + 1);
+      }
+      const THIRTY_DAYS_AGO = NOW - 30 * 24 * 60 * 60 * 1000;
+      const SIXTY_DAYS_AGO = NOW - 60 * 24 * 60 * 60 * 1000;
+      const newContacts: { email: string; daysAgo: number }[] = [];
+      const silentContacts: { email: string; daysSilent: number; priorCount: number }[] = [];
+      for (const [sender, firstDate] of senderFirstDate) {
+        const count = senderCount.get(sender) || 0;
+        // New contact: first email is in the last 30 days, has at least 2 messages
+        if (firstDate.getTime() > THIRTY_DAYS_AGO && count >= 2) {
+          const daysAgo = Math.round((NOW - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+          newContacts.push({ email: sender, daysAgo });
+        }
+        // Silent contact: had meaningful communication (5+ emails), last email 60+ days ago
+        const lastDate = senderLastDate.get(sender)!;
+        if (count >= 5 && lastDate.getTime() < SIXTY_DAYS_AGO) {
+          const daysSilent = Math.round((NOW - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+          silentContacts.push({ email: sender, daysSilent, priorCount: count });
+        }
+      }
+      newContacts.sort((a, b) => a.daysAgo - b.daysAgo);
+      silentContacts.sort((a, b) => b.priorCount - a.priorCount);
+      const topNewContacts = newContacts.slice(0, 6);
+      const topSilentContacts = silentContacts.slice(0, 5);
+
+      // ═══════════════════════════════════════
       // ATTACHMENT FILENAME PATTERNS
       // (We have hasAttachment bit but Gmail metadata doesn't give filenames without full reads.
       // Use subject patterns as proxy for repeated document flows.)
@@ -1330,6 +1428,15 @@ export async function POST(request: Request) {
           from: t.otherParty,
           daysSince: t.daysSinceInbound,
         })),
+        waitingOnThem: topWaitingOnThem.map((t) => ({
+          subject: t.subject.slice(0, 80),
+          to: t.recipient,
+          daysSince: t.daysSince,
+        })),
+        newContacts: topNewContacts,
+        silentContacts: topSilentContacts,
+        calendarAccessError,
+        driveAccessError,
       };
       send({ type: "orgIntelligence", ...orgIntelData });
 

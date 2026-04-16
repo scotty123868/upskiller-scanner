@@ -130,6 +130,11 @@ type OrgIntelligence = {
   topStandingMeetings?: { title: string; occurrences: number; totalMinutes: number; attendeeAvg: number }[];
   awaitingResponse?: { subject: string; from: string; daysSince: number; isCustomerLead: boolean }[];
   droppedThreads?: { subject: string; from: string; daysSince: number }[];
+  waitingOnThem?: { subject: string; to: string; daysSince: number }[];
+  newContacts?: { email: string; daysAgo: number }[];
+  silentContacts?: { email: string; daysSilent: number; priorCount: number }[];
+  calendarAccessError?: boolean;
+  driveAccessError?: boolean;
 };
 
 export default function Home() {
@@ -518,21 +523,44 @@ export default function Home() {
 
 /* ─── NAV ─── */
 function Nav({ user }: { user?: { email: string; name: string; avatarUrl: string } | null }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const signOut = () => {
+    // Clear all auth cookies
+    ["ally_user", "scan_token", "user_id", "scan_provider"].forEach((c) => {
+      document.cookie = `${c}=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/`;
+    });
+    window.location.href = "/";
+  };
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-5 md:px-18 h-14 md:h-15 flex items-center justify-between" style={{ background: "rgba(250,249,247,0.88)", backdropFilter: "blur(24px)", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
       <a href="https://upskillerai.com" className="font-fraunces font-medium text-base md:text-lg" style={{ letterSpacing: "-0.03em" }}>UpSkiller</a>
       <div className="flex items-center gap-3 md:gap-4">
         {user ? (
-          <div className="flex items-center gap-2">
-            {user.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatarUrl} alt="" className="w-7 h-7 rounded-full" />
-            ) : (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#1a1a1a", color: "#faf9f7" }}>
-                {(user.name || user.email || "?").charAt(0).toUpperCase()}
+          <div className="relative">
+            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatarUrl} alt="" className="w-7 h-7 rounded-full" />
+              ) : (
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#1a1a1a", color: "#faf9f7" }}>
+                  {(user.name || user.email || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="text-xs font-medium hidden sm:inline" style={{ color: "#6b6560" }}>{user.name || user.email}</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="transition-transform" style={{ transform: menuOpen ? "rotate(180deg)" : "rotate(0)" }}>
+                <path d="M2 4l3 3 3-3" stroke="#6b6560" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 rounded-xl shadow-lg overflow-hidden" style={{ background: "#fff", border: "1px solid #ddd8d0" }}>
+                <div className="px-3 py-2.5" style={{ borderBottom: "1px solid #f0ede8" }}>
+                  <p className="text-xs font-medium truncate">{user.email}</p>
+                </div>
+                <button onClick={signOut} className="w-full text-left px-3 py-2.5 text-xs hover:bg-[#f0ede8] transition-colors" style={{ color: "#6b6560" }}>
+                  Sign out
+                </button>
               </div>
             )}
-            <span className="text-xs font-medium hidden sm:inline" style={{ color: "#6b6560" }}>{user.name || user.email}</span>
           </div>
         ) : (
           <>
@@ -821,6 +849,7 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
   const highCount = findings.filter((f) => f.severity === "high").length;
   const gapFileRef = useRef<HTMLInputElement>(null);
   const automatableWorkflows = workflows.filter(w => w.automationScore >= 70);
+  const [agentLogOpen, setAgentLogOpen] = useState(false);
 
   return (
     <div className="animate-fade-up">
@@ -885,6 +914,19 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
             );
           })()}
 
+          {/* Access errors — tell user to re-auth when Calendar/Drive fail */}
+          {(orgIntel.calendarAccessError || orgIntel.driveAccessError) && (
+            <div className="px-5 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(245,158,11,0.05)" }}>
+              <p className="text-xs" style={{ color: "rgba(245,158,11,0.85)" }}>
+                <b>Partial scan:</b>{" "}
+                {orgIntel.calendarAccessError && orgIntel.driveAccessError && "Calendar and Drive access not granted."}
+                {orgIntel.calendarAccessError && !orgIntel.driveAccessError && "Calendar access not granted."}
+                {!orgIntel.calendarAccessError && orgIntel.driveAccessError && "Drive access not granted."}
+                {" "}Sign out and reconnect to include these data sources.
+              </p>
+            </div>
+          )}
+
           {/* Awaiting your response — immediately actionable */}
           {(orgIntel.awaitingResponse?.length || 0) > 0 && (
             <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -918,6 +960,31 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
             </div>
           )}
 
+          {/* Waiting on them — you sent, they haven't replied */}
+          {(orgIntel.waitingOnThem?.length || 0) > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>
+                Waiting on them to reply
+              </p>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                You sent something 4+ days ago and haven&apos;t heard back. Time to follow up?
+              </p>
+              <div className="space-y-1.5">
+                {orgIntel.waitingOnThem?.slice(0, 5).map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 py-1.5 px-3 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{t.subject}</p>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.3)" }}>→ {t.to}</p>
+                    </div>
+                    <span className="text-xs tabular-nums flex-shrink-0" style={{ color: "rgba(245,158,11,0.8)" }}>
+                      {t.daysSince}d
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Dropped threads — conversations that died after the other side replied */}
           {(orgIntel.droppedThreads?.length || 0) > 0 && (
             <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -939,6 +1006,47 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* New contacts + silent contacts (relationship pulse) */}
+          {((orgIntel.newContacts?.length || 0) > 0 || (orgIntel.silentContacts?.length || 0) > 0) && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#06b6d4" }}>
+                Your relationship pulse
+              </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                {(orgIntel.newContacts?.length || 0) > 0 && (
+                  <div>
+                    <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      New people in the last 30 days
+                    </p>
+                    <div className="space-y-1">
+                      {orgIntel.newContacts?.slice(0, 5).map((c) => (
+                        <div key={c.email} className="flex items-center justify-between py-1">
+                          <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.6)" }}>{c.email}</span>
+                          <span className="text-xs tabular-nums ml-2 flex-shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>{c.daysAgo}d ago</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(orgIntel.silentContacts?.length || 0) > 0 && (
+                  <div>
+                    <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      Gone quiet (used to email frequently)
+                    </p>
+                    <div className="space-y-1">
+                      {orgIntel.silentContacts?.slice(0, 5).map((c) => (
+                        <div key={c.email} className="flex items-center justify-between py-1">
+                          <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.6)" }}>{c.email}</span>
+                          <span className="text-xs tabular-nums ml-2 flex-shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>{c.daysSilent}d quiet</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1814,24 +1922,39 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
         </div>
       )}
 
-      {/* Findings + Agent Log */}
-      <div className="mt-8 grid md:grid-cols-5 gap-6">
-        <div className="md:col-span-2 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Agent Log</span>
+      {/* Findings + Agent Log — log is sticky so it doesn't leave empty column */}
+      <div className="mt-8 grid md:grid-cols-5 gap-6 items-start">
+        <div className="md:col-span-2 md:sticky md:top-20 rounded-xl overflow-hidden self-start" style={{ background: "#1a1a1a" }}>
+          <button
+            onClick={() => setAgentLogOpen(!agentLogOpen)}
+            className="w-full px-4 py-3 flex items-center justify-between transition-colors hover:bg-white/5"
+            style={{ borderBottom: agentLogOpen ? "1px solid rgba(255,255,255,0.06)" : "none" }}
+          >
+            <div className="flex items-center gap-2">
+              <svg
+                width="12" height="12" viewBox="0 0 12 12" fill="none"
+                className="transition-transform"
+                style={{ transform: agentLogOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+              >
+                <path d="M4 2l4 4-4 4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Agent Log</span>
+            </div>
             <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.2)" }}>{agentLog.length} events</span>
-          </div>
-          <div className="p-3 max-h-96 overflow-y-auto space-y-1">
-            {agentLog.map((entry) => (
-              <div key={entry.id} className="px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", borderLeft: entry.type === "finding" ? "2px solid #c4501e" : "2px solid rgba(255,255,255,0.06)" }}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: entry.type === "finding" ? "#c4501e" : "rgba(255,255,255,0.3)" }}>{entry.agent}</span>
-                  <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.15)" }}>{entry.timestamp}</span>
+          </button>
+          {agentLogOpen && (
+            <div className="p-3 max-h-[70vh] overflow-y-auto space-y-1">
+              {agentLog.map((entry) => (
+                <div key={entry.id} className="px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", borderLeft: entry.type === "finding" ? "2px solid #c4501e" : "2px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: entry.type === "finding" ? "#c4501e" : "rgba(255,255,255,0.3)" }}>{entry.agent}</span>
+                    <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.15)" }}>{entry.timestamp}</span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>{entry.message}</p>
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>{entry.message}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="md:col-span-3 space-y-3">
           <FindingsList findings={findings} />
