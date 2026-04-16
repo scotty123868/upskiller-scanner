@@ -649,62 +649,35 @@ function ScanningView({ progress, findings, totalSavings, agentLog, scanSource, 
               style={{ width: `${Math.min((progress.scanned / progress.records) * 100, 95)}%` }} />
           </div>
           <div className="mt-3 flex items-center gap-6">
-            <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{progress.scanned.toLocaleString()}</b> / {progress.records.toLocaleString()} records</span>
-            <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{findings.length}</b> findings</span>
-            {totalSavings > 0 && <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#c4501e] font-semibold">${formatDollarDisplay(totalSavings)}</b> surfaced</span>}
+            <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{Math.min(Math.round((progress.scanned / Math.max(progress.records, 1)) * 100), 99)}%</b> complete</span>
+            {findings.length > 0 && <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{findings.length}</b> findings</span>}
+            {techStack.length > 0 && <span className="text-xs tabular-nums" style={{ color: "#a8a29e" }}><b className="text-[#6b6560] font-semibold">{techStack.length}</b> tools found</span>}
           </div>
         </div>
       )}
 
-      {/* Mini Command Center Preview */}
-      {(techStack.length > 0 || summary.totalAnnualSpend) && (
+      {/* Discovered tools (during scan) */}
+      {techStack.length > 0 && (
         <div className="mt-8 rounded-xl overflow-hidden" style={{ background: "#1a1a1a" }}>
-          <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>Command Center Preview</span>
-            {summary.coverageScore != null && (
-              <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.3)" }}>Coverage: {summary.coverageScore}%</span>
-            )}
+          <div className="px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Discovered {techStack.length} tools in your email
+            </span>
           </div>
-          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {summary.totalAnnualSpend && (
-              <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Est. Annual Spend</p>
-                <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.totalAnnualSpend}</p>
-              </div>
-            )}
-            {summary.totalAnnualWaste && (
-              <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Waste Identified</p>
-                <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "#c4501e", letterSpacing: "-0.03em" }}>{summary.totalAnnualWaste}</p>
-              </div>
-            )}
-            <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Apps Discovered</p>
-              <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{summary.appsDiscovered || techStack.length}</p>
-            </div>
-            <div className="p-4 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Findings</p>
-              <p className="mt-2 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{findings.length}</p>
+          <div className="px-5 py-4">
+            <div className="flex flex-wrap gap-2">
+              {techStack.slice(0, 25).map((app) => (
+                <span key={app.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
+                  {app.name}
+                </span>
+              ))}
+              {techStack.length > 25 && (
+                <span className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.2)" }}>
+                  +{techStack.length - 25} more
+                </span>
+              )}
             </div>
           </div>
-          {/* Tech stack strip */}
-          {techStack.length > 0 && (
-            <div className="px-5 pb-4">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>Tech Stack</p>
-              <div className="flex flex-wrap gap-2">
-                {techStack.slice(0, 20).map((app) => (
-                  <span key={app.name} className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
-                    {app.name} <span style={{ color: "rgba(255,255,255,0.25)" }}>{app.estimatedCost}</span>
-                  </span>
-                ))}
-                {techStack.length > 20 && (
-                  <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.2)" }}>
-                    +{techStack.length - 20} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
