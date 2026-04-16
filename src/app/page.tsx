@@ -51,6 +51,7 @@ type TechStackApp = {
   name: string;
   category: string;
   estimatedCost: string;
+  costSource?: "invoice" | "estimate" | "unknown";
   emailActivity: number;
   actualAmounts?: number[];
 };
@@ -358,11 +359,12 @@ export default function Home() {
           // Tech stack from DB uses backend field names; map to frontend shape
           if (s.tech_stack && Array.isArray(s.tech_stack)) {
             setTechStack(s.tech_stack.map((t: Record<string, unknown>) => ({
-              name: t.name || "",
-              category: t.category || "",
-              estimatedCost: t.estimatedCost || (t.estimatedAnnualCost ? "~est." : "detected"),
-              emailActivity: t.emailActivity || t.emailCount || 0,
-              actualAmounts: t.actualAmounts || [],
+              name: (t.name as string) || "",
+              category: (t.category as string) || "",
+              estimatedCost: (t.estimatedCost as string) || (t.estimatedAnnualCost ? "~est." : "detected"),
+              costSource: (t.costSource as "invoice" | "estimate" | "unknown") || undefined,
+              emailActivity: (t.emailActivity as number) || (t.emailCount as number) || 0,
+              actualAmounts: (t.actualAmounts as number[]) || [],
             })));
           }
           setGaps(s.gaps || []);
@@ -1168,24 +1170,128 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
         </div>
       )}
 
-      {/* Tech stack strip (compact) */}
-      {techStack.length > 0 && (
-        <div className="mb-8 p-4 rounded-xl" style={{ border: "1px solid #ddd8d0" }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#a8a29e" }}>
-            Detected in your email ({techStack.length} tools)
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {techStack.slice(0, 20).map((app) => (
-              <span key={app.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "#f0ede8", color: "#1a1a1a" }}>
-                {app.name}
-              </span>
-            ))}
-            {techStack.length > 20 && (
-              <span className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "#f0ede8", color: "#a8a29e" }}>+{techStack.length - 20} more</span>
+      {/* ════════════════════════════════════════ */}
+      {/* TECH STACK COMMAND CENTER               */}
+      {/* Groups by category, flags duplicates,    */}
+      {/* shows real invoice amounts vs estimates. */}
+      {/* ════════════════════════════════════════ */}
+      {techStack.length > 0 && (() => {
+        // Group by category
+        const byCategory = techStack.reduce((acc, app) => {
+          const cat = app.category || "Other";
+          if (!acc[cat]) acc[cat] = [];
+          acc[cat].push(app);
+          return acc;
+        }, {} as Record<string, TechStackApp[]>);
+
+        // Sort categories by tool count (most tools first)
+        const sortedCats = Object.entries(byCategory).sort((a, b) => b[1].length - a[1].length);
+
+        // Detect duplicate categories (multiple tools in same category = consolidation opportunity)
+        const duplicateCats = sortedCats.filter(([, tools]) => tools.length > 1);
+
+        // Count tools with real invoice data
+        const withInvoices = techStack.filter((t) => t.costSource === "invoice").length;
+        const verifiedSpend = techStack
+          .filter((t) => t.costSource === "invoice")
+          .reduce((sum, t) => sum + (t.actualAmounts?.reduce((a, b) => a + b, 0) || 0), 0);
+
+        return (
+          <div className="mb-8">
+            <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+              <h3 className="font-fraunces text-xl font-light" style={{ letterSpacing: "-0.02em" }}>
+                Your tech stack
+              </h3>
+              <div className="flex items-center gap-3 text-xs" style={{ color: "#a8a29e" }}>
+                <span>{techStack.length} tools across {sortedCats.length} categories</span>
+                {withInvoices > 0 && (
+                  <span style={{ color: "#10b981" }}>• {withInvoices} with verified spend</span>
+                )}
+              </div>
+            </div>
+
+            {/* Verified spend callout (only when we have real invoice data) */}
+            {verifiedSpend > 0 && (
+              <div className="mb-4 p-4 rounded-xl flex items-center justify-between flex-wrap gap-3" style={{ background: "#f0ede8", border: "1px solid #ddd8d0" }}>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#10b981" }}>Verified annual spend</p>
+                  <p className="font-fraunces text-2xl font-light mt-1" style={{ letterSpacing: "-0.02em" }}>${formatDollarDisplay(verifiedSpend)}</p>
+                </div>
+                <p className="text-xs" style={{ color: "#6b6560" }}>
+                  From {withInvoices} real invoice{withInvoices === 1 ? "" : "s"} in your email. All other tools detected but costs unknown.
+                </p>
+              </div>
             )}
+
+            {/* Duplicate categories warning */}
+            {duplicateCats.length > 0 && (
+              <div className="mb-4 p-4 rounded-xl" style={{ background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>
+                  {duplicateCats.length} categor{duplicateCats.length === 1 ? "y has" : "ies have"} overlapping tools
+                </p>
+                <div className="space-y-1.5">
+                  {duplicateCats.slice(0, 3).map(([cat, tools]) => (
+                    <p key={cat} className="text-xs" style={{ color: "#6b6560" }}>
+                      <b>{cat}:</b> {tools.map((t) => t.name).join(" + ")} — consolidation opportunity
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Category groups */}
+            <div className="space-y-4">
+              {sortedCats.map(([category, tools]) => {
+                const hasOverlap = tools.length > 1;
+                return (
+                  <div key={category} className="rounded-xl overflow-hidden" style={{ border: "1px solid #ddd8d0" }}>
+                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "#f0ede8" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#6b6560" }}>{category}</span>
+                        <span className="text-xs" style={{ color: "#a8a29e" }}>{tools.length} tool{tools.length === 1 ? "" : "s"}</span>
+                      </div>
+                      {hasOverlap && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                          overlap
+                        </span>
+                      )}
+                    </div>
+                    <div className="divide-y" style={{ borderColor: "#ddd8d0" }}>
+                      {tools.sort((a, b) => b.emailActivity - a.emailActivity).map((app) => {
+                        const actualSpend = app.actualAmounts?.reduce((a, b) => a + b, 0) || 0;
+                        const isVerified = app.costSource === "invoice" && actualSpend > 0;
+                        return (
+                          <div key={app.name} className="px-4 py-3 flex items-center justify-between flex-wrap gap-2" style={{ borderTop: "1px solid #ddd8d0" }}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{app.name}</p>
+                              <p className="text-xs mt-0.5" style={{ color: "#a8a29e" }}>
+                                {app.emailActivity} email{app.emailActivity === 1 ? "" : "s"} from this sender
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              {isVerified ? (
+                                <>
+                                  <p className="text-sm font-semibold tabular-nums" style={{ color: "#10b981" }}>${formatDollarDisplay(actualSpend)}</p>
+                                  <p className="text-xs" style={{ color: "#a8a29e" }}>verified</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-xs" style={{ color: "#a8a29e" }}>spend unknown</p>
+                                  <p className="text-xs" style={{ color: "#d4d0ca" }}>connect to verify</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ════════════════════════════════════════ */}
       {/* THE HOOK — gap wizard as game levels    */}
