@@ -131,6 +131,7 @@ export default function Home() {
   const [workflows, setWorkflows] = useState<{ name: string; type: string; description: string; frequency: string; participants: string[]; automationScore: number; agentBlueprint?: { trigger: string; steps: string[]; humanInTheLoop: string; complexity: string }; estimatedTimeSavings: string; estimatedAnnualSavings: string; evidence: string }[]>([]);
   const [activeSection, setActiveSection] = useState<"spend" | "workflows" | "waste" | null>(null);
   const [orgIntel, setOrgIntel] = useState<OrgIntelligence | null>(null);
+  const [signedInUser, setSignedInUser] = useState<{ email: string; name: string; avatarUrl: string } | null>(null);
   const addAgentLog = useCallback((agent: string, message: string, type: AgentLogEntry["type"] = "progress") => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -353,6 +354,10 @@ export default function Home() {
     fetch("/api/scan-results")
       .then((res) => res.json())
       .then((data) => {
+        // If user info is returned, user is signed in (whether or not they have a scan)
+        if (data.user) {
+          setSignedInUser(data.user);
+        }
         if (data.scan) {
           const s = data.scan;
           setSummary(s.summary || {});
@@ -418,7 +423,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Nav />
+      <Nav user={signedInUser} />
       <main className="pt-24 md:pt-32 px-5 md:px-18 max-w-5xl mx-auto pb-16">
         {scanError && (
           <div className="mb-6 p-4 rounded-xl flex items-start gap-3" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
@@ -438,7 +443,7 @@ export default function Home() {
           </div>
         )}
         {mode === "choose" && (
-          <ChooseMode startGoogleScan={startGoogleScan} setScanError={setScanError} />
+          <ChooseMode startGoogleScan={startGoogleScan} setScanError={setScanError} user={signedInUser} />
         )}
         {mode === "uploading" && <UploadingState fileName={fileName} />}
         {mode === "scanning" && (
@@ -476,25 +481,58 @@ export default function Home() {
 }
 
 /* ─── NAV ─── */
-function Nav() {
+function Nav({ user }: { user?: { email: string; name: string; avatarUrl: string } | null }) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-5 md:px-18 h-14 md:h-15 flex items-center justify-between" style={{ background: "rgba(250,249,247,0.88)", backdropFilter: "blur(24px)", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
       <a href="https://upskillerai.com" className="font-fraunces font-medium text-base md:text-lg" style={{ letterSpacing: "-0.03em" }}>UpSkiller</a>
       <div className="flex items-center gap-3 md:gap-4">
-        <span className="text-xs font-semibold tracking-wider uppercase hidden sm:inline" style={{ color: "#a8a29e" }}>Scanner</span>
-        <a href="mailto:scotty@upskillerai.com" className="text-xs md:text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
+        {user ? (
+          <div className="flex items-center gap-2">
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt="" className="w-7 h-7 rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#1a1a1a", color: "#faf9f7" }}>
+                {(user.name || user.email || "?").charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span className="text-xs font-medium hidden sm:inline" style={{ color: "#6b6560" }}>{user.name || user.email}</span>
+          </div>
+        ) : (
+          <>
+            <span className="text-xs font-semibold tracking-wider uppercase hidden sm:inline" style={{ color: "#a8a29e" }}>Scanner</span>
+            <a href="mailto:scotty@upskillerai.com" className="text-xs md:text-sm font-semibold px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-[#1a1a1a] text-[#faf9f7] hover:bg-[#333] transition-all">Talk to us</a>
+          </>
+        )}
       </div>
     </nav>
   );
 }
 
 /* ─── CHOOSE MODE ─── */
-function ChooseMode({ startGoogleScan, setScanError }: {
+function ChooseMode({ startGoogleScan, setScanError, user }: {
   startGoogleScan: (admin: boolean) => void;
   setScanError: (error: string | null) => void;
+  user?: { email: string; name: string; avatarUrl: string } | null;
 }) {
   return (
     <div className="animate-fade-up max-w-2xl">
+      {user && (
+        <div className="mb-6 flex items-center gap-3 p-3 rounded-xl" style={{ background: "#f0ede8" }}>
+          {user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.avatarUrl} alt="" className="w-9 h-9 rounded-full" />
+          ) : (
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "#1a1a1a", color: "#faf9f7" }}>
+              {(user.name || user.email).charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">Welcome back, {user.name?.split(" ")[0] || user.email}</p>
+            <p className="text-xs" style={{ color: "#a8a29e" }}>{user.email} · Signed in via Google</p>
+          </div>
+        </div>
+      )}
       <h1 className="font-fraunces text-3xl md:text-5xl font-light leading-snug md:leading-tight" style={{ letterSpacing: "-0.04em", textWrap: "balance" }}>
         See what your systems are sitting on.
       </h1>
@@ -1225,60 +1263,111 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
 
             {/* Duplicate categories warning */}
             {duplicateCats.length > 0 && (
-              <div className="mb-4 p-4 rounded-xl" style={{ background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.2)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>
-                  {duplicateCats.length} categor{duplicateCats.length === 1 ? "y has" : "ies have"} overlapping tools
-                </p>
+              <div className="mb-5 p-4 rounded-xl" style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 6v4m0 3v.01M10 18a8 8 0 100-16 8 8 0 000 16z" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#f59e0b" }}>
+                    Consolidation opportunities
+                  </p>
+                </div>
                 <div className="space-y-1.5">
                   {duplicateCats.slice(0, 3).map(([cat, tools]) => (
-                    <p key={cat} className="text-xs" style={{ color: "#6b6560" }}>
-                      <b>{cat}:</b> {tools.map((t) => t.name).join(" + ")} — consolidation opportunity
+                    <p key={cat} className="text-sm" style={{ color: "#1a1a1a" }}>
+                      <b>{cat}:</b> <span style={{ color: "#6b6560" }}>{tools.map((t) => t.name).join(" + ")}</span>
                     </p>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Category groups */}
-            <div className="space-y-4">
+            {/* Category groups — prettier cards */}
+            <div className="space-y-3">
               {sortedCats.map(([category, tools]) => {
                 const hasOverlap = tools.length > 1;
+                // Pick a color per category from a curated palette for visual variety
+                const categoryColors: Record<string, string> = {
+                  Communication: "#3b82f6",
+                  "Project Management": "#8b5cf6",
+                  CRM: "#ec4899",
+                  Finance: "#10b981",
+                  Accounting: "#10b981",
+                  Marketing: "#f97316",
+                  Sales: "#ec4899",
+                  "Sales Intelligence": "#ec4899",
+                  AI: "#a78bfa",
+                  "AI Writing": "#a78bfa",
+                  Analytics: "#06b6d4",
+                  HR: "#14b8a6",
+                  Design: "#f59e0b",
+                  "Dev Tools": "#6366f1",
+                  "Cloud": "#6366f1",
+                  Storage: "#64748b",
+                  Security: "#dc2626",
+                  Legal: "#78716c",
+                  Payments: "#10b981",
+                  "Website Builder": "#f59e0b",
+                  CMS: "#f59e0b",
+                  Learning: "#14b8a6",
+                };
+                const catColor = categoryColors[category] || "#6b7280";
+
                 return (
-                  <div key={category} className="rounded-xl overflow-hidden" style={{ border: "1px solid #ddd8d0" }}>
-                    <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: "#f0ede8" }}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#6b6560" }}>{category}</span>
-                        <span className="text-xs" style={{ color: "#a8a29e" }}>{tools.length} tool{tools.length === 1 ? "" : "s"}</span>
+                  <div key={category} className="rounded-2xl overflow-hidden transition-all hover:shadow-sm" style={{ border: "1px solid #ddd8d0", background: "#ffffff" }}>
+                    {/* Category header with color accent */}
+                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid #f0ede8" }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-1 h-5 rounded-full" style={{ background: catColor }} />
+                        <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#1a1a1a", letterSpacing: "0.1em" }}>{category}</span>
+                        <span className="text-xs" style={{ color: "#a8a29e" }}>· {tools.length} {tools.length === 1 ? "tool" : "tools"}</span>
                       </div>
                       {hasOverlap && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ background: "rgba(245,158,11,0.12)", color: "#d97706" }}>
                           overlap
                         </span>
                       )}
                     </div>
-                    <div className="divide-y" style={{ borderColor: "#ddd8d0" }}>
-                      {tools.sort((a, b) => b.emailActivity - a.emailActivity).map((app) => {
+                    <div>
+                      {tools.sort((a, b) => b.emailActivity - a.emailActivity).map((app, idx) => {
                         const actualSpend = app.actualAmounts?.reduce((a, b) => a + b, 0) || 0;
                         const isVerified = app.costSource === "invoice" && actualSpend > 0;
+                        const initial = app.name.charAt(0).toUpperCase();
                         return (
-                          <div key={app.name} className="px-4 py-3 flex items-center justify-between flex-wrap gap-2" style={{ borderTop: "1px solid #ddd8d0" }}>
+                          <div key={app.name} className="px-5 py-3.5 flex items-center gap-3 transition-colors hover:bg-[#faf9f7]" style={{ borderTop: idx > 0 ? "1px solid #f4f2ee" : "none" }}>
+                            {/* Letter avatar with category color */}
+                            <div
+                              className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
+                              style={{
+                                background: `${catColor}15`,
+                                color: catColor,
+                              }}
+                            >
+                              {initial}
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{app.name}</p>
-                              <p className="text-xs mt-0.5" style={{ color: "#a8a29e" }}>
-                                {app.emailActivity} email{app.emailActivity === 1 ? "" : "s"} from this sender
-                              </p>
+                              <p className="text-sm font-semibold truncate" style={{ color: "#1a1a1a" }}>{app.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs" style={{ color: "#a8a29e" }}>
+                                  {app.emailActivity} {app.emailActivity === 1 ? "email" : "emails"}
+                                </span>
+                                {app.emailActivity >= 10 && (
+                                  <span className="text-[10px] font-semibold uppercase" style={{ color: catColor, opacity: 0.7 }}>active</span>
+                                )}
+                              </div>
                             </div>
                             <div className="text-right flex-shrink-0">
                               {isVerified ? (
-                                <>
-                                  <p className="text-sm font-semibold tabular-nums" style={{ color: "#10b981" }}>${formatDollarDisplay(actualSpend)}</p>
-                                  <p className="text-xs" style={{ color: "#a8a29e" }}>verified</p>
-                                </>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                                  <div>
+                                    <p className="text-sm font-bold tabular-nums" style={{ color: "#10b981" }}>${formatDollarDisplay(actualSpend)}</p>
+                                    <p className="text-[10px] uppercase tracking-wider" style={{ color: "#a8a29e" }}>verified</p>
+                                  </div>
+                                </div>
                               ) : (
-                                <>
-                                  <p className="text-xs" style={{ color: "#a8a29e" }}>spend unknown</p>
-                                  <p className="text-xs" style={{ color: "#d4d0ca" }}>connect to verify</p>
-                                </>
+                                <div>
+                                  <p className="text-xs font-medium" style={{ color: "#a8a29e" }}>— unknown —</p>
+                                  <p className="text-[10px]" style={{ color: "#c4c0ba" }}>connect to verify</p>
+                                </div>
                               )}
                             </div>
                           </div>

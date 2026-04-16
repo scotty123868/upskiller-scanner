@@ -12,16 +12,18 @@ export async function GET(request: Request) {
   }
 
   // For read-only results, verify user exists in DB (fast).
-  // Token validation happens on write paths (scan, scan-google) to prevent expensive API abuse.
   const { data: user } = await supabaseAdmin
     .from("users")
-    .select("id")
+    .select("id, email, name, avatar_url")
     .eq("id", userId)
     .single();
 
   if (!user) {
     return Response.json({ scan: null }, { status: 200 });
   }
+
+  // Always return the user info so frontend can show "signed in" state
+  const userInfo = { email: user.email, name: user.name, avatarUrl: user.avatar_url };
 
   // Get latest completed scan with findings (scoped to verified user)
   const { data: scan } = await supabaseAdmin
@@ -34,7 +36,8 @@ export async function GET(request: Request) {
     .single();
 
   if (!scan) {
-    return Response.json({ scan: null }, { status: 200 });
+    // Signed in but no scan yet
+    return Response.json({ scan: null, user: userInfo }, { status: 200 });
   }
 
   // Get findings for this scan
@@ -60,5 +63,6 @@ export async function GET(request: Request) {
       workflows: scan.workflows || [],
       org_intelligence: scan.org_intelligence || null,
     },
+    user: userInfo,
   });
 }

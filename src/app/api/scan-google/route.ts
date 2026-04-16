@@ -1096,7 +1096,10 @@ Focus on what the data actually shows. Ignore passes where you lack data.
 
 4. **RENEWAL DATES MENTIONED IN EMAILS** — Only include dates that are literally in the email body. If a renewal email says "renews on June 15, 2026", that's a finding. If no date is mentioned, don't guess.
 
-5. **DUPLICATE TOOL CATEGORIES** — If you see Slack AND Microsoft Teams both in the tech stack, that's a duplicate flag. Recommend picking one.
+5. **DUPLICATE / COMPETING TOOLS** — Flag tools that serve the same purpose, even across different categories. Use your knowledge:
+   - Same category: Slack + Teams, Asana + Monday, Zoom + Google Meet
+   - Cross-category (same job): Harmonic AI + PitchBook (both investor/company intelligence), Clay + Apollo (both sales prospecting), HubSpot + Salesforce (both CRM even if our DB says one is "CMS"), Notion + Coda (both workspace/docs)
+   - Add a finding per overlap with: both tool names, what they both do, and recommendation to consolidate.
 
 6. **OBSERVABLE RECURRING PROCESSES** — The cadence data pre-detected patterns. Turn each into a workflow entry with real evidence.
 
