@@ -310,8 +310,15 @@ Respond ONLY with the JSON object, no other text.`,
         }
       } catch (err) {
         console.error("Claude API error:", err);
-        send({ type: "agent-log", agent: "Dispatch", message: `Analysis error: ${err instanceof Error ? err.message : "Unknown"}`, logType: "progress" });
-        send({ type: "error", message: `Analysis failed: ${err instanceof Error ? err.message : "Unknown error"}. Please try again.` });
+        const errMsg = err instanceof Error ? err.message : String(err);
+        let friendlyMsg = "Analysis failed. Please try again.";
+        if (errMsg.includes("credit balance") || errMsg.includes("billing")) {
+          friendlyMsg = "Our AI analysis service is temporarily unavailable. Please try again in a few minutes.";
+        } else if (errMsg.includes("overloaded") || errMsg.includes("529")) {
+          friendlyMsg = "High demand right now. Please try again in a minute.";
+        }
+        send({ type: "agent-log", agent: "Dispatch", message: `Analysis error: ${errMsg.slice(0, 100)}`, logType: "progress" });
+        send({ type: "error", message: friendlyMsg });
         send({ type: "progress", records: totalRecords, scanned: totalRecords, message: "Scan failed." });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

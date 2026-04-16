@@ -185,7 +185,8 @@ export async function POST(request: Request) {
       } catch { /* fall back to detecting from email patterns */ }
 
       send({ type: "agent-log", agent: "Dispatch", message: `Agentic crawler initialized. ${TOTAL_APPS} apps in pricing database. Deploying agents...`, logType: "progress" });
-      send({ type: "progress", records: 100, scanned: 0, message: "Starting full system crawl..." });
+      send({ type: "progress", records: 100, scanned: 1, message: "Connecting to Gmail..." });
+      send({ type: "agent-log", agent: "Scout", message: "Connecting to Google Workspace APIs...", logType: "progress" });
 
       // ═══════════════════════════════════════
       // AGENT 1: SCOUT — Full Email Metadata Extraction
@@ -252,9 +253,11 @@ export async function POST(request: Request) {
               senderDomains.set(meta.domain, (senderDomains.get(meta.domain) || 0) + 1);
             }
           }
-          if (i > 0 && i % 100 === 0) {
-            send({ type: "progress", records: 100, scanned: Math.floor((i / batch.length) * 15), message: `Extracted metadata from ${i}/${batch.length} emails...` });
-          }
+          // Update progress every batch (user sees movement immediately)
+          const processed = Math.min(i + BATCH_SIZE, batch.length);
+          const pct = Math.floor((processed / batch.length) * 15);
+          const domainsFound = senderDomains.size;
+          send({ type: "progress", records: 100, scanned: Math.max(2, pct), message: `Reading ${processed}/${batch.length} emails... ${domainsFound} domains found` });
         }
 
         // Match sender domains against SaaS database
@@ -1263,8 +1266,20 @@ RULES:
             } catch { /* persistence is non-critical */ }
           }
       } catch (err) {
-        send({ type: "agent-log", agent: "Atlas", message: `Analysis error: ${err instanceof Error ? err.message : "unknown"}`, logType: "progress" });
-        send({ type: "error", message: `Analysis failed: ${err instanceof Error ? err.message : "Unknown error"}. Please try again.` });
+        const errMsg = err instanceof Error ? err.message : String(err);
+        // Provide user-friendly error messages for common failures
+        let friendlyMsg = "Analysis failed. Please try again.";
+        if (errMsg.includes("credit balance") || errMsg.includes("billing")) {
+          friendlyMsg = "Our AI analysis service is temporarily unavailable. Please try again in a few minutes.";
+        } else if (errMsg.includes("overloaded") || errMsg.includes("529")) {
+          friendlyMsg = "High demand right now. Please try again in a minute.";
+        } else if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+          friendlyMsg = "Too many requests. Please wait a moment and try again.";
+        } else if (errMsg.includes("context") || errMsg.includes("too long")) {
+          friendlyMsg = "Your data set is very large. Try scanning a smaller time range.";
+        }
+        send({ type: "agent-log", agent: "Atlas", message: `Analysis error: ${errMsg.slice(0, 100)}`, logType: "progress" });
+        send({ type: "error", message: friendlyMsg });
         send({ type: "progress", records: 100, scanned: 100, message: "Scan failed." });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
