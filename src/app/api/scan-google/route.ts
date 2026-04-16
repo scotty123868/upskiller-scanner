@@ -170,6 +170,8 @@ export async function POST(request: Request) {
       let orgUserCount = 0;
       let totalItems = 0;
       let userDomain = ""; // The org's email domain
+      let calMeetingTypes: Record<string, number> = {};
+      let calBackToBack = 0;
 
       // Detect the user's org domain from their email
       try {
@@ -197,13 +199,27 @@ export async function POST(request: Request) {
       try {
         const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-        // Get recent email IDs — up to 800 for richer signal
-        const senderRes = await gmail.users.messages.list({ userId: "me", maxResults: 500, q: "newer_than:6m" });
-        const messageIds = senderRes.data.messages || [];
-        send({ type: "agent-log", agent: "Scout", message: `Extracting metadata from ${messageIds.length} recent emails...`, logType: "discovery" });
+        // Paginate Gmail list API to get up to ~2000 emails (was capped at 500)
+        const messageIds: { id?: string | null }[] = [];
+        let pageToken: string | undefined = undefined;
+        const MAX_EMAILS = 2000;
+        while (messageIds.length < MAX_EMAILS) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const listRes: any = await gmail.users.messages.list({
+            userId: "me", maxResults: 500, q: "newer_than:6m", pageToken,
+          });
+          const pageMessages = listRes.data.messages || [];
+          if (pageMessages.length === 0) break;
+          messageIds.push(...pageMessages);
+          pageToken = listRes.data.nextPageToken || undefined;
+          if (!pageToken) break;
+          send({ type: "progress", records: 100, scanned: 2, message: `Found ${messageIds.length} emails so far...` });
+        }
+        send({ type: "agent-log", agent: "Scout", message: `Found ${messageIds.length} emails in last 6 months. Extracting metadata in parallel...`, logType: "discovery" });
 
         const senderDomains = new Map<string, number>();
-        const batch = messageIds.slice(0, 500);
+        // Process up to 1500 for metadata (parallel batches are fast)
+        const batch = messageIds.slice(0, 1500);
 
         // Parse email addresses from header
         const extractEmails = (header: string): string[] => {
@@ -423,11 +439,14 @@ export async function POST(request: Request) {
       try {
         const drive = google.drive({ version: "v3", auth: oauth2Client });
         const driveSearches = [
-          { q: "trashed=false and (name contains 'contract' or name contains 'agreement' or name contains 'SOW')", cat: "contracts" },
-          { q: "trashed=false and (name contains 'invoice' or name contains 'PO' or name contains 'purchase')", cat: "procurement" },
-          { q: "trashed=false and (name contains 'budget' or name contains 'vendor' or name contains 'renewal')", cat: "finance" },
+          { q: "trashed=false and (name contains 'contract' or name contains 'agreement' or name contains 'SOW' or name contains 'MSA' or name contains 'NDA')", cat: "contracts" },
+          { q: "trashed=false and (name contains 'invoice' or name contains 'PO' or name contains 'purchase' or name contains 'receipt')", cat: "procurement" },
+          { q: "trashed=false and (name contains 'budget' or name contains 'vendor' or name contains 'renewal' or name contains 'forecast')", cat: "finance" },
+          { q: "trashed=false and (name contains 'report' or name contains 'dashboard' or name contains 'kpi' or name contains 'metrics')", cat: "reports" },
+          { q: "trashed=false and (name contains 'roadmap' or name contains 'plan' or name contains 'okrs' or name contains 'strategy')", cat: "planning" },
           { q: "trashed=false and mimeType='application/vnd.google-apps.spreadsheet'", cat: "spreadsheet" },
           { q: "trashed=false and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'", cat: "spreadsheet" },
+          { q: "trashed=false and mimeType='application/vnd.google-apps.document' and modifiedTime > '" + new Date(Date.now() - 30*24*60*60*1000).toISOString() + "'", cat: "recent_docs" },
         ];
 
         const seenFileIds = new Set<string>();
@@ -496,13 +515,25 @@ export async function POST(request: Request) {
         const allEvents: any[] = [];
         for (const calId of calendarIds.slice(0, 10)) { // Cap at 10 calendars
           try {
-            const calRes = await calendar.events.list({
-              calendarId: calId,
-              timeMin: sixMonthsAgo.toISOString(),
-              timeMax: new Date().toISOString(),
-              maxResults: 300, singleEvents: true, orderBy: "startTime",
-            });
-            allEvents.push(...(calRes.data.items || []));
+            // Paginate up to 1000 events per calendar
+            let pageToken: string | undefined = undefined;
+            let fetched = 0;
+            while (fetched < 1000) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const calRes: any = await calendar.events.list({
+                calendarId: calId,
+                timeMin: sixMonthsAgo.toISOString(),
+                timeMax: new Date().toISOString(),
+                maxResults: 500, singleEvents: true, orderBy: "startTime",
+                pageToken,
+              });
+              const items = calRes.data.items || [];
+              if (items.length === 0) break;
+              allEvents.push(...items);
+              fetched += items.length;
+              pageToken = calRes.data.nextPageToken || undefined;
+              if (!pageToken) break;
+            }
           } catch { /* skip inaccessible calendars */ }
         }
 
@@ -584,6 +615,45 @@ export async function POST(request: Request) {
         const confTools = new Set(allCalendarEvents.map((e) => e.conferenceType).filter(Boolean));
 
         send({ type: "agent-log", agent: "Signal", message: `${events.length} events analyzed. ${recurring.length} recurring. ${withExternal.length} with external attendees. ${totalMeetingHours}h total meeting time. Video tools: ${[...confTools].join(", ") || "none detected"}`, logType: "discovery" });
+
+        // Meeting type classification
+        const meetingTypes: Record<string, number> = {
+          standup: 0, oneOnOne: 0, review: 0, demo: 0, interview: 0,
+          sync: 0, sales: 0, planning: 0, retro: 0, kickoff: 0, allHands: 0,
+        };
+        for (const e of allCalendarEvents) {
+          const s = e.summary.toLowerCase();
+          if (/standup|daily\b/.test(s)) meetingTypes.standup++;
+          else if (/\b1[:\s]?(on|:)?[:\s]?1\b|1-1|one.on.one|\/\/|check[- ]?in/.test(s)) meetingTypes.oneOnOne++;
+          else if (/review|feedback|critique/.test(s)) meetingTypes.review++;
+          else if (/demo|walkthrough/.test(s)) meetingTypes.demo++;
+          else if (/interview|screen|phone screen|candidate/.test(s)) meetingTypes.interview++;
+          else if (/sync|sync[- ]up|catch[- ]?up/.test(s)) meetingTypes.sync++;
+          else if (/sales|pitch|discovery|prospect/.test(s)) meetingTypes.sales++;
+          else if (/planning|roadmap|sprint plan/.test(s)) meetingTypes.planning++;
+          else if (/retro|retrospective|post[- ]?mortem/.test(s)) meetingTypes.retro++;
+          else if (/kickoff|kick[- ]?off|kick off/.test(s)) meetingTypes.kickoff++;
+          else if (/all[- ]?hands|town ?hall|company meeting/.test(s)) meetingTypes.allHands++;
+        }
+
+        // Back-to-back meeting detection (no buffer between)
+        const sortedEvents = [...allCalendarEvents]
+          .filter((e) => e.duration > 0)
+          .map((e) => ({ ...e, start: new Date(e.date), end: new Date(new Date(e.date).getTime() + e.duration * 60000) }))
+          .sort((a, b) => a.start.getTime() - b.start.getTime());
+        let backToBack = 0;
+        for (let i = 1; i < sortedEvents.length; i++) {
+          const prev = sortedEvents[i - 1];
+          const curr = sortedEvents[i];
+          const gapMinutes = (curr.start.getTime() - prev.end.getTime()) / 60000;
+          // Same day and gap < 5 minutes
+          if (gapMinutes >= 0 && gapMinutes < 5 && prev.end.toDateString() === curr.start.toDateString()) {
+            backToBack++;
+          }
+        }
+
+        calMeetingTypes = meetingTypes;
+        calBackToBack = backToBack;
 
       } catch (err) {
         send({ type: "agent-log", agent: "Signal", message: `Calendar: ${err instanceof Error ? err.message.slice(0, 60) : "denied"}`, logType: "progress" });
@@ -708,6 +778,84 @@ export async function POST(request: Request) {
         }
       }
       const deepThreads = [...threadCounts.entries()].filter(([, count]) => count >= 5).sort((a, b) => b[1] - a[1]);
+
+      // ═══════════════════════════════════════
+      // AFTER-HOURS WORK DETECTION
+      // Emails the user SENT during nights/weekends reveal work-life pattern
+      // ═══════════════════════════════════════
+      let afterHoursCount = 0;
+      let weekendCount = 0;
+      let totalUserSends = 0;
+      const sendHourHistogram: number[] = new Array(24).fill(0);
+      for (const email of allEmailMeta) {
+        // Only count emails the user themselves sent (from their own domain)
+        if (!email.from.endsWith(`@${userDomain || "___NONE___"}`)) continue;
+        const d = new Date(email.date);
+        if (isNaN(d.getTime())) continue;
+        totalUserSends++;
+        const hour = d.getHours();
+        const dow = d.getDay();
+        sendHourHistogram[hour]++;
+        if (hour < 7 || hour >= 20) afterHoursCount++;
+        if (dow === 0 || dow === 6) weekendCount++;
+      }
+      const afterHoursPct = totalUserSends > 0 ? Math.round((afterHoursCount / totalUserSends) * 100) : 0;
+      const weekendPct = totalUserSends > 0 ? Math.round((weekendCount / totalUserSends) * 100) : 0;
+      // Find peak send hour
+      const peakHour = sendHourHistogram.indexOf(Math.max(...sendHourHistogram));
+
+      // ═══════════════════════════════════════
+      // REPLY LATENCY ANALYSIS
+      // How fast the user responds to inbound emails
+      // ═══════════════════════════════════════
+      // Build thread timelines: for each thread, find incoming + outgoing + time deltas
+      const threadTimelines = new Map<string, { date: Date; isFromUser: boolean }[]>();
+      for (const email of allEmailMeta) {
+        if (!email.threadId) continue;
+        const d = new Date(email.date);
+        if (isNaN(d.getTime())) continue;
+        const isFromUser = userDomain ? email.from.endsWith(`@${userDomain}`) : false;
+        if (!threadTimelines.has(email.threadId)) threadTimelines.set(email.threadId, []);
+        threadTimelines.get(email.threadId)!.push({ date: d, isFromUser });
+      }
+      const replyLatenciesMinutes: number[] = [];
+      for (const [, timeline] of threadTimelines) {
+        timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+        for (let i = 1; i < timeline.length; i++) {
+          const prev = timeline[i - 1];
+          const curr = timeline[i];
+          if (!prev.isFromUser && curr.isFromUser) {
+            const mins = (curr.date.getTime() - prev.date.getTime()) / 60000;
+            if (mins > 0 && mins < 60 * 24 * 7) replyLatenciesMinutes.push(mins);
+          }
+        }
+      }
+      replyLatenciesMinutes.sort((a, b) => a - b);
+      const medianReplyMins = replyLatenciesMinutes.length > 0
+        ? replyLatenciesMinutes[Math.floor(replyLatenciesMinutes.length / 2)]
+        : 0;
+      const fastReplies = replyLatenciesMinutes.filter((m) => m < 15).length;
+      const slowReplies = replyLatenciesMinutes.filter((m) => m > 60 * 24).length;
+
+      // ═══════════════════════════════════════
+      // ATTACHMENT FILENAME PATTERNS
+      // (We have hasAttachment bit but Gmail metadata doesn't give filenames without full reads.
+      // Use subject patterns as proxy for repeated document flows.)
+      // ═══════════════════════════════════════
+      const subjectPatterns = new Map<string, number>();
+      const docKeywords = /\b(invoice|receipt|contract|report|proposal|statement|quote|po[\s-#]|purchase[\s_-]order|expense|reimbursement|pitch|deck|w[-\s]?[92]|nda|msa|sow|estimate)\b/i;
+      for (const email of allEmailMeta) {
+        if (!email.hasAttachment) continue;
+        const match = email.subject.toLowerCase().match(docKeywords);
+        if (match) {
+          const key = match[0].toLowerCase().replace(/\s+/g, "_");
+          subjectPatterns.set(key, (subjectPatterns.get(key) || 0) + 1);
+        }
+      }
+      const topDocPatterns = [...subjectPatterns.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .filter(([, count]) => count >= 2);
 
       // ═══════════════════════════════════════
       // CADENCE & WORKFLOW PATTERN DETECTION
@@ -928,6 +1076,14 @@ export async function POST(request: Request) {
         gmailLabels: gmailLabels.slice(0, 20),
         roleInboxes: [...roleInboxes].slice(0, 10),
         topExternalSenders,
+        afterHoursPct,
+        weekendPct,
+        peakHour,
+        medianReplyMins,
+        fastReplies,
+        slowReplies,
+        totalUserSends,
+        docPatterns: topDocPatterns.map(([name, count]) => ({ name, count })),
       };
       send({ type: "orgIntelligence", ...orgIntelData });
 
@@ -965,6 +1121,16 @@ export async function POST(request: Request) {
         `\nAttachment patterns:`,
         `  - ${attachmentEmails.length} emails with attachments`,
         `  - ${heavyAttachmentThreads} threads with 2+ attachments (potential manual data exchange)`,
+        ...(topDocPatterns.length > 0 ? [`  - Document types in subjects: ${topDocPatterns.map(([n, c]) => `${n}(${c})`).join(", ")}`] : []),
+        `\nWork patterns:`,
+        `  - User sent ${totalUserSends} emails`,
+        `  - ${afterHoursPct}% sent after-hours (before 7am or after 8pm)`,
+        `  - ${weekendPct}% sent on weekends`,
+        `  - Peak sending hour: ${peakHour}:00`,
+        `\nResponse behavior:`,
+        `  - Median reply time: ${medianReplyMins < 60 ? Math.round(medianReplyMins) + " min" : Math.round(medianReplyMins / 60) + " hrs"}`,
+        `  - ${fastReplies} replies within 15 min (interruption-driven)`,
+        `  - ${slowReplies} replies took 24+ hours (batch processing)`,
         ...(gmailLabels.length > 0 ? [`\nGmail labels (user-created):`, `  - ${gmailLabels.join(", ")}`] : []),
         ...(roleInboxes.size > 0 ? [`\nRole inboxes detected:`, `  - ${[...roleInboxes].join(", ")}`] : []),
       ].join("\n");
@@ -998,10 +1164,13 @@ export async function POST(request: Request) {
           `Recurring events: ${recurring.length}`,
           `Events with external attendees: ${withExternal.length}`,
           `Video tools: ${[...confTools.entries()].map(([t, c]) => `${t}(${c})`).join(", ") || "none"}`,
+          `Back-to-back meetings (no buffer): ${calBackToBack}`,
+          `\nMeeting type breakdown:`,
+          ...Object.entries(calMeetingTypes).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([t, c]) => `  - ${t}: ${c}`),
           `\nTop external domains in calendar (vendor relationships):`,
           ...topVendorMeetings.map(([d, c]) => `  - ${d}: ${c} meetings`),
           `\nRecurring meetings with external attendees:`,
-          ...withExternal.filter((e) => e.isRecurring).slice(0, 10).map((e) => `  - "${e.summary}" with ${e.externalDomains.join(", ")} (${e.attendeeCount} attendees, ${e.duration}min)`),
+          ...withExternal.filter((e) => e.isRecurring).slice(0, 12).map((e) => `  - "${e.summary}" with ${e.externalDomains.join(", ")} (${e.attendeeCount} attendees, ${e.duration}min)`),
         ].join("\n");
       })();
 
@@ -1105,11 +1274,55 @@ Focus on what the data actually shows. Ignore passes where you lack data.
 
 6. **OBSERVABLE RECURRING PROCESSES** — The cadence data pre-detected patterns. Turn each into a workflow entry with real evidence.
 
-7. **AUTOMATABLE EMAIL WORKFLOWS** — Things like:
-   - Receipt/invoice processing into expense tools (automatable)
-   - Renewal notifications → calendar entries (automatable)
-   - Report emails being compiled manually (automatable)
-   - Data extraction from standardized emails (automatable)
+7. **AUTOMATABLE WORKFLOWS** — Look for these SPECIFIC patterns and recommend concrete automations:
+
+   **RECEIPT & EXPENSE AUTOMATION** (travel, SaaS receipts, meals)
+   - Pattern: Multiple receipt emails from same vendor (Uber, Airlines, Amazon, SaaS tools) with dollar amounts
+   - Automation: Extract receipts → categorize → push to QuickBooks/Expensify/Brex
+
+   **SUBSCRIPTION / RENEWAL TRACKING**
+   - Pattern: Monthly/annual renewal notifications across multiple tools
+   - Automation: Central subscription tracker with 30/60/90 day alerts
+
+   **INVOICE PROCESSING**
+   - Pattern: Invoice emails with consistent format (vendor → amount → due date)
+   - Automation: Extract line items → AP workflow → approval routing
+
+   **MEETING-TO-ACTION EXTRACTION**
+   - Pattern: Recurring meetings followed by summary emails
+   - Automation: Meeting transcript → action items → task system (Linear/Asana)
+
+   **STATUS REPORTING**
+   - Pattern: Weekly/monthly reports sent manually, often compiled from multiple sources
+   - Automation: Auto-pull metrics → generate report → distribute
+
+   **LEAD ROUTING / QUALIFICATION**
+   - Pattern: Inbound emails from prospects requiring routing
+   - Automation: Classify → enrich → assign to owner → CRM entry
+
+   **SCHEDULING BACK-AND-FORTH**
+   - Pattern: 3+ emails to schedule one meeting
+   - Automation: Calendly/Clara-style scheduling bot
+
+   **APPROVAL CHAINS**
+   - Pattern: Forward chain for approvals (A→B→C→B→A)
+   - Automation: Formal workflow tool (Ramp approvals, ApprovalMax)
+
+   **FAQ / TEMPLATE EMAILS**
+   - Pattern: Same question being answered repeatedly
+   - Automation: Knowledge base, template responses, AI email assistant
+
+   **CROSS-SYSTEM DATA ENTRY**
+   - Pattern: Spreadsheets emailed between people, "update the sheet" mentions
+   - Automation: Direct integration between systems (Zapier, Make, native APIs)
+
+   **NEWSLETTER / DIGEST**
+   - Pattern: Many newsletter senders filling inbox
+   - Automation: Auto-summarize → weekly digest
+
+   **VENDOR STATUS CHECKS**
+   - Pattern: Recurring meetings with same vendors, often for status updates
+   - Automation: Shared status dashboard replacing sync meetings
 
 ### NOT AUTOMATABLE (don't suggest these)
 - Negotiations of any kind
@@ -1117,6 +1330,19 @@ Focus on what the data actually shows. Ignore passes where you lack data.
 - Strategic decisions
 - Approval of >$X dollars
 - Anything requiring human judgment on trust, fit, or strategy
+
+8. **WORK PATTERN INSIGHTS** — Use the after-hours / reply latency / meeting load data:
+   - If afterHoursPct > 30%: User works nights. Flag as "reclaim time" opportunity via delegation/automation.
+   - If weekendPct > 15%: Weekend work pattern. Worth noting.
+   - If backToBack > 20% of total meetings: Calendar fragmentation, minimal deep work. Recommend meeting audit.
+   - If median reply < 15 min: Interrupt-driven. Likely fighting fires instead of proactive work.
+   - If median reply > 24 hr: Bottleneck on user. Consider email triage automation or delegation.
+   - If one meeting type dominates (e.g., 30+ 1:1s): That's a lot of overhead. Recommend batching or async.
+
+9. **DRIVE INTELLIGENCE INSIGHTS** — Use Drive file data:
+   - Shared spreadsheets with many permissions = potential "spreadsheet-as-database" (candidate for real tool)
+   - Multiple contracts/SOWs with no central tracking = recommend contract management tool
+   - Recent docs in last 30 days shows active workflows (what are they working on right now?)
 
 ### DO NOT DO THESE PASSES (not enough data from single inbox)
 - ❌ License waste estimates (no actual usage data)
@@ -1222,7 +1448,7 @@ RULES:
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const opusStream = anthropic.messages.stream({
-              model: "claude-opus-4-20250514",
+              model: "claude-opus-4-7",
               max_tokens: 16384,
               messages: [{ role: "user", content: prompt }],
             });

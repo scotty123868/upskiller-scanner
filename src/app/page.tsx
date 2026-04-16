@@ -112,6 +112,14 @@ type OrgIntelligence = {
   gmailLabels: string[];
   roleInboxes: string[];
   topExternalSenders?: { email: string; domain: string; count: number }[];
+  afterHoursPct?: number;
+  weekendPct?: number;
+  peakHour?: number;
+  medianReplyMins?: number;
+  fastReplies?: number;
+  slowReplies?: number;
+  totalUserSends?: number;
+  docPatterns?: { name: string; count: number }[];
 };
 
 export default function Home() {
@@ -964,6 +972,71 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
               </div>
             );
           })()}
+
+          {/* Work patterns — after-hours, reply speed, meeting load */}
+          {((orgIntel.afterHoursPct || 0) > 0 || (orgIntel.medianReplyMins || 0) > 0) && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#a78bfa" }}>
+                Your work patterns
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {(orgIntel.afterHoursPct || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: (orgIntel.afterHoursPct || 0) > 30 ? "#f59e0b" : "rgba(255,255,255,0.85)" }}>{orgIntel.afterHoursPct}%</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>emails sent after-hours</p>
+                  </div>
+                )}
+                {(orgIntel.weekendPct || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: (orgIntel.weekendPct || 0) > 15 ? "#f59e0b" : "rgba(255,255,255,0.85)" }}>{orgIntel.weekendPct}%</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>sent on weekends</p>
+                  </div>
+                )}
+                {(orgIntel.medianReplyMins || 0) > 0 && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {(orgIntel.medianReplyMins || 0) < 60
+                        ? `${Math.round(orgIntel.medianReplyMins || 0)}m`
+                        : `${Math.round((orgIntel.medianReplyMins || 0) / 60)}h`}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>median reply time</p>
+                  </div>
+                )}
+                {(orgIntel.peakHour !== undefined && orgIntel.peakHour !== null) && (
+                  <div>
+                    <p className="font-fraunces text-2xl font-light" style={{ color: "rgba(255,255,255,0.85)" }}>
+                      {orgIntel.peakHour === 0 ? "12am" : orgIntel.peakHour < 12 ? `${orgIntel.peakHour}am` : orgIntel.peakHour === 12 ? "12pm" : `${orgIntel.peakHour - 12}pm`}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>peak email hour</p>
+                  </div>
+                )}
+              </div>
+              {((orgIntel.afterHoursPct || 0) > 30 || (orgIntel.weekendPct || 0) > 15) && (
+                <p className="text-xs mt-3 italic" style={{ color: "rgba(245,158,11,0.7)" }}>
+                  Work bleeding into nights and weekends often means automation opportunities.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Document patterns */}
+          {orgIntel.docPatterns && orgIntel.docPatterns.length > 0 && (
+            <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#f59e0b" }}>
+                Recurring document flows
+              </p>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                Documents you receive repeatedly. These are prime automation candidates.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {orgIntel.docPatterns.slice(0, 8).map((p) => (
+                  <span key={p.name} className="text-xs px-2.5 py-1.5 rounded-full" style={{ background: "rgba(245,158,11,0.1)", color: "rgba(245,158,11,0.8)" }}>
+                    {p.name.replace(/_/g, " ")} <span style={{ opacity: 0.6 }}>× {p.count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Video tools + shared spreadsheets */}
           <div className="px-5 py-4 flex flex-wrap gap-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
