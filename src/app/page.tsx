@@ -786,14 +786,15 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
       {orgIntel && (
         <div className="mb-10 rounded-2xl overflow-hidden animate-fade-in reveal-3" style={{ background: "#1a1a1a" }}>
 
-          {/* Quick stats row */}
+          {/* Quick stats row — only show stats with real data */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "rgba(255,255,255,0.06)" }}>
             {[
-              { label: "People", value: orgIntel.orgSize, sub: orgIntel.orgDomain || "detected" },
-              { label: "External partners", value: orgIntel.externalDomains, sub: `${orgIntel.externalMeetings} meetings` },
-              { label: "Recurring processes", value: orgIntel.recurringProcesses.length, sub: "detected from email" },
-              { label: "Meeting load", value: `${Math.round(orgIntel.meetingHours6mo / 26)}h/wk`, sub: `${orgIntel.recurringMeetings} recurring` },
-            ].map((stat) => (
+              { label: "People", value: orgIntel.orgSize, sub: orgIntel.orgDomain || "detected", show: orgIntel.orgSize > 0 },
+              { label: "External partners", value: orgIntel.externalDomains, sub: orgIntel.externalMeetings > 0 ? `${orgIntel.externalMeetings} meetings` : "from email domains", show: orgIntel.externalDomains > 0 },
+              { label: "Recurring processes", value: orgIntel.recurringProcesses.length, sub: "detected from email", show: orgIntel.recurringProcesses.length > 0 },
+              { label: "Meeting load", value: `${Math.round(orgIntel.meetingHours6mo / 26)}h/wk`, sub: `${orgIntel.recurringMeetings} recurring`, show: orgIntel.meetingHours6mo > 0 },
+              { label: "Email threads", value: orgIntel.emailsAnalyzed, sub: `${orgIntel.deepThreads} deep threads`, show: orgIntel.recurringProcesses.length === 0 && orgIntel.meetingHours6mo === 0 && orgIntel.emailsAnalyzed > 0 },
+            ].filter((s) => s.show).slice(0, 4).map((stat) => (
               <div key={stat.label} className="p-4" style={{ background: "#1a1a1a" }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>{stat.label}</p>
                 <p className="mt-1 font-fraunces text-xl font-light" style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "-0.03em" }}>{stat.value}</p>
@@ -844,17 +845,32 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
           {(orgIntel.topCommunicators.length > 0 || orgIntel.humanMiddleware.length > 0) && (
             <div className="px-5 py-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <div className="grid md:grid-cols-2 gap-4">
-                {orgIntel.topCommunicators.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.3)" }}>Highest volume communicators</p>
-                    {orgIntel.topCommunicators.slice(0, 4).map((c) => (
-                      <div key={c.email} className="flex items-center justify-between py-1.5">
-                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{c.email.split("@")[0]}</span>
-                        <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: "rgba(255,255,255,0.25)" }}>{c.total} emails</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {orgIntel.topCommunicators.length > 0 && (() => {
+                  const totalEmails = orgIntel.topCommunicators.reduce((s, c) => s + c.total, 0);
+                  const topPerson = orgIntel.topCommunicators[0];
+                  const topPct = totalEmails > 0 ? Math.round((topPerson.total / totalEmails) * 100) : 0;
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: topPct > 60 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>
+                        {topPct > 60 ? "Communication bottleneck" : "Communication distribution"}
+                      </p>
+                      {topPct > 60 && (
+                        <p className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>
+                          {topPerson.email.split("@")[0]} handles {topPct}% of all email. If they&apos;re unavailable, communication stalls.
+                        </p>
+                      )}
+                      {orgIntel.topCommunicators.slice(0, 4).map((c) => {
+                        const pct = totalEmails > 0 ? Math.round((c.total / totalEmails) * 100) : 0;
+                        return (
+                          <div key={c.email} className="flex items-center justify-between py-1.5">
+                            <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{c.email.split("@")[0]}</span>
+                            <span className="text-xs tabular-nums flex-shrink-0 ml-2" style={{ color: pct > 50 ? "#f59e0b" : "rgba(255,255,255,0.25)" }}>{pct}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {orgIntel.humanMiddleware.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#f59e0b" }}>Information routers</p>
@@ -895,7 +911,7 @@ function DoneView({ findings, agentLog, techStack, gaps, summary, renewals, auto
             )}
             {orgIntel.roleInboxes && orgIntel.roleInboxes.length > 0 && (
               <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(59,130,246,0.1)", color: "rgba(59,130,246,0.7)" }}>
-                Role inboxes: {orgIntel.roleInboxes.map((r) => r.split("@")[0]).join(", ")}
+                Role inboxes: {[...new Set(orgIntel.roleInboxes.map((r) => r.split("@")[0]))].join(", ")}
               </span>
             )}
             {orgIntel.gmailLabels && orgIntel.gmailLabels.length > 0 && (
